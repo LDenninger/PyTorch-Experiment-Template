@@ -13,14 +13,16 @@ It is intended to serve as the base for a new project. It contains basic functio
     │           ├── logs            # Directory holding the logs (e.g. TensorBoard)
     │           ├── visualizations  # Directory holding visualizations
     │           └── config.json     # Config file for the run
-    ├── models                      # Directory holding all source files for the models
-    ├── utils                       # Directory holding utility functions for the project
-    │   ├── helper_functions.py     # Some basic helper functions
-    │   ├── management.py           # Management functions for the experiment environment
-    │   ├── model_debugger.py       # A debugger for PyTorch modules that hooks into the forward or backward pass
-    │   └── profiler.py             # A profiler timing computation steps (currently only synchronous CPU operations)
-    ├── visualization               # Directory holding the visualization functions
-    │   └── plotting_utils.py       # Some helper functions for visualization
+    ├── src                         # Directory holding the complete source code
+    │    ├── models                 # Directory holding all source files for the models
+    │    │   ├── util_modules.py    # Some useful torch modules
+    │    ├── utils                  # Directory holding utility functions for the project
+    │    │   ├── helper_functions.py# Some basic helper functions
+    │    │   ├── management.py      # Management functions for the experiment environment
+    │    │   ├── model_debugger.py  # A debugger for PyTorch modules that hooks into the forward or backward pass
+    │    │   └── profiler.py        # A profiler timing computation steps (currently only synchronous CPU operations)
+    │    ├── visualization          # Directory holding the visualization functions
+    │    │   └── plotting_utils.py  # Some helper functions for visualization
     ├── env.sh                      # Source file for the environment setup
     ├── keep_exp.sh                 # File to create .gitkeep files in all directories
     └── run.py                      # The main file to run all functions
