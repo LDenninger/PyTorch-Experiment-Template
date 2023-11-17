@@ -199,7 +199,7 @@ def save_checkpoint(model, optimizer, scheduler, epoch, save_path, finished=Fals
     return
 
 
-#####===== Logger Module =====#####
+#####===== Logger Modules =====#####
 
 class Logger(object):
 
@@ -227,7 +227,10 @@ class Logger(object):
             self.initialize(exp_name, run_name,log_to_file, log_file_name, log_internal, plot_path, checkpoint_path,log_path,visualization_path)
             self.run_initialized = True
         else:
-            self.run_initialized = False            
+            self.run_initialized = False  
+
+        global LOGGER_WANDB
+        LOGGER_WANDB = self          
 
 
     def initialize(self,
@@ -535,6 +538,89 @@ class Logger(object):
     def _get_datetime(self) -> str:
         return datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
     
+###--- Tensorboard Logger ---###
+# This logger was taken from: https://github.com/angelvillar96/TemplaTorch/tree/master
+    
+class LoggerTB():
+    """
+    Class that instanciates a Logger object to write logs into a file
+
+    Args:
+    -----
+    exp_path: string
+        path to the root directory of an experiment where the logs are saved
+    file_name: string
+        name of the file where logs are stored
+    """
+
+    def __init__(self, exp_path, file_name="logs.txt"):
+        """
+        Initializer of the logger object
+        """
+
+        logs_path = os.path.join(exp_path, file_name)
+        self.logs_path = logs_path
+
+        global LOGGER_TB
+        LOGGER_TB = self
+
+        return
+
+    def log_git_hash(self):
+        """ Logging git hash"""
+        hash = get_current_git_hash()
+        log_info(f"Using git sha: {hash}")
+        return
+
+    def log_info(self, message, message_type="info", **kwargs):
+        """
+        Logging a message into the file
+        """
+
+        if(message_type not in ["new_exp", "info", "warning", "error", "params"]):
+            message_type = "info"
+        cur_time = self._get_datetime()
+        format_message = self._format_message(message=message, cur_time=cur_time,
+                                              message_type=message_type)
+        with open(self.logs_path, 'a') as f:
+            f.write(format_message)
+
+        if(message_type == "error"):
+            exit()
+
+        return
+
+    def log_params(self, params):
+        """
+        Logging parameters so that it is visually appealing
+        Args:
+        -----
+        params: dictionary
+            dictionary containing parameters and values
+        """
+
+        for param, value in params.items():
+            message = f"    {param}:{value}"
+            self.log_info(message, message_type="params")
+
+        return
+
+    def _format_message(self, message, cur_time, message_type="info"):
+        """
+        Formatting the message to have a standarizied template
+        """
+        pre_string = ""
+        if(message_type == "new_exp"):
+            pre_string = "\n\n\n"
+        form_message = f"{pre_string}{cur_time}    {message_type.upper()}: {message}\n"
+        return form_message
+
+    def _get_datetime(self):
+        """
+        Obtaining current data and time in format YYYY-MM-DD-HH-MM-SS
+        """
+        time = datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
+        return time
 #####===== Metric Tracker =====#####
 
 class MetricTracker:
@@ -600,8 +686,3 @@ class MetricTracker:
         else:
             self.metrics = {}
     
-
-#####===== Global Logger =====#####
-# This logger should be used throughout the project
-
-LOGGER = Logger()
