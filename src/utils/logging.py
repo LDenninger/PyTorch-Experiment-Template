@@ -7,8 +7,7 @@
     Author: Luis Denninger <l_denninger@uni-bonn.de>
 
 """
-import wandb
-wandb.login()
+
 import numpy as np
 import json
 import torch
@@ -223,6 +222,8 @@ class Logger(object):
                 run_name [str]: Name of the run within the experiment.
                 log_file_name Optional[str]: Name of the log file.
         """
+        import wandb
+        wandb.login()
         if exp_name is not None and run_name is not None:
             self.initialize(exp_name, run_name,log_to_file, log_file_name, log_internal, plot_path, checkpoint_path,log_path,visualization_path)
             self.run_initialized = True
