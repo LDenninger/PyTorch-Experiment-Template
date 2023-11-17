@@ -689,3 +689,5 @@ class MetricTracker:
 
 #####===== Global Logger =====#####
 # This logger should be used throughout the project
+
+LOGGER = None
