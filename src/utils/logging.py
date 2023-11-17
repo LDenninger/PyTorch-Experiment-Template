@@ -229,8 +229,8 @@ class Logger(object):
         else:
             self.run_initialized = False  
 
-        global LOGGER_WANDB
-        LOGGER_WANDB = self          
+        global LOGGER
+        LOGGER = self          
 
 
     def initialize(self,
@@ -561,8 +561,8 @@ class LoggerTB():
         logs_path = os.path.join(exp_path, file_name)
         self.logs_path = logs_path
 
-        global LOGGER_TB
-        LOGGER_TB = self
+        global LOGGER
+        LOGGER = self
 
         return
 
@@ -686,3 +686,6 @@ class MetricTracker:
         else:
             self.metrics = {}
     
+
+#####===== Global Logger =====#####
+# This logger should be used throughout the project
