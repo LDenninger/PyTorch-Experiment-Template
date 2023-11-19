@@ -70,6 +70,19 @@ def clear_logs(experiment_name, run_name):
     print_(f'Logs directory removed at: {path}')
     return 1
 
+def resolve_experiment(experiment_name: str = None, run_name: str = None):
+    """ Resolve the experiment and run name with environment variables."""
+    if experiment_name is None:
+        if 'CURRENT_EXP' is os.environ.keys():
+            experiment_name = os.environ['CURRENT_EXP']
+        else:
+            print_('No experiment name specified')
+    if run_name is None:
+        if 'CURRENT_RUN' is os.environ.keys():
+            run_name = os.environ['CURRENT_RUN']
+        else:
+            print_('No run name specified')
+    return experiment_name, run_name
 
 ###--- Configurations ---###
 
