@@ -160,7 +160,7 @@ def log_module(module, save_path, append=True):
     return
 
 @log_function
-def save_checkpoint(model, epoch, optimizer=None, scheduler=None, save_path=None, finished=False, savename=None):
+def save_checkpoint(epoch, model=None, optimizer=None, scheduler=None, save_path=None, finished=False, save_name=None):
     """
     Saving a checkpoint in the models directory of the experiment. This checkpoint
     contains state_dicts for the mode, optimizer and lr_scheduler
@@ -178,9 +178,9 @@ def save_checkpoint(model, epoch, optimizer=None, scheduler=None, save_path=None
         if True, current checkpoint corresponds to the finally trained model
     """
 
-    if(savename is not None):
-        checkpoint_name = savename
-    elif(savename is None and finished is True):
+    if(save_name is not None):
+        checkpoint_name = save_name+f'epoch_{epoch}.pth'
+    elif(save_name is None and finished is True):
         checkpoint_name = "checkpoint_epoch_final.pth"
     else:
         checkpoint_name = f"checkpoint_epoch_{epoch}.pth"
@@ -193,8 +193,9 @@ def save_checkpoint(model, epoch, optimizer=None, scheduler=None, save_path=None
 
     savepath = os.path.join(save_path, checkpoint_name)
 
-    scheduler_data = "" if scheduler is None else scheduler.state_dict()
-    data = {'epoch': epoch, 'model_state_dict': model.state_dict()}
+    data = {'epoch': epoch}
+    if model is not None:
+        data['model_state_dict'] = model.state_dict()
     if optimizer is not None:
         data['optimizer_state_dict'] = optimizer.state_dict()
     if scheduler is not None:
@@ -282,6 +283,18 @@ class Logger(object):
 
         if self.wandb_writer is not None:
             self.wandb_writer.log_config(config)
+
+    def log_image(self, name: str, image: Union[torch.tensor, np.array], step: Optional[int] = None) -> None:
+        if self.wandb_writer is not None:
+            self.wandb_writer.log_image(name, image, step)
+        if self.tb_writer is not None:
+            self.tb_writer.log_image(name, image, step)
+
+    def log_histograms(self, name: str, values: Union[np.array, torch.tensor]):
+        if torch.is_tensor(values):
+            values = values.cpu().numpy()
+        if self.wandb_writer is not None:
+            self.wandb_writer.log_histogram(name, values)
 
     def initialize_csv(self, file_name: str = None):
         file_name = P(self.log_path) / file_name if file_name is not None else P(self.log_path) / "metrics.csv"
@@ -487,6 +500,13 @@ class WandBWriter(object):
     
     def log_config(self, config: Dict[str, Any]) -> None:
         self.run.config.update(config)
+
+    def log_histogram(self, name: str, values: Union[torch.Tensor, np.array], step: Optional[int]=None) -> None:
+        if torch.is_tensor(values):
+            values = values.detach().cpu().numpy()
+
+        hist = wandb.Histogram(values)
+        wandb.log({name: hist}, step=step)
     
     def log_image(self, name: str, image: Union[torch.Tensor, np.array], step: Optional[int]=None) -> None:
         """
@@ -566,5 +586,33 @@ class WandBWriter(object):
                         }})              
         wandb.log({name: wandbImage}, step=step)
 
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+
+    def __init__(self, i=1, precision=3):
+        self.meters = i
+        self.precision = precision
+        self.reset(self.meters)
+
+    def reset(self, i):
+        self.val = [0]*i
+        self.avg = [0]*i
+        self.sum = [0]*i
+        self.count = 0
+
+    def update(self, val, n=1):
+        if not isinstance(val, list):
+            val = [val]
+        assert(len(val) == self.meters)
+        self.count += n
+        for i,v in enumerate(val):
+            self.val[i] = v
+            self.sum[i] += v * n
+            self.avg[i] = self.sum[i] / self.count
+
+    def __repr__(self):
+        val = ' '.join(['{:.{}f}'.format(v, self.precision) for v in self.val])
+        avg = ' '.join(['{:.{}f}'.format(a, self.precision) for a in self.avg])
+        return '{} ({})'.format(val, avg)
     
 LOGGER = None
