@@ -235,6 +235,9 @@ class Logger(object):
         self.wandb_writer = None
         self.tb_writer = None
         self.internal_writer = None
+
+        global LOGGER
+        LOGGER = self
     
     def log(self, data: Dict[str, Any], step: Optional[int]=None) -> bool:
         if self.csv_writer is not None:
