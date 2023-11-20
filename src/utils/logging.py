@@ -257,6 +257,21 @@ class Logger(object):
         with open(self.log_file_path, 'a') as f:
             f.write(msg_str)  
 
+    def log_config(self, config: Dict[str, Any]) -> None:
+        """
+            Log configuration to the log file.
+        """
+
+        cur_time = self._get_datetime()
+        msg_str = f'{cur_time}   [config]:\n'
+        msg_str += '\n'.join([f'  {k}: {v}' for k,v in config.items()])
+
+        with open(self.log_file_path, 'a') as f:
+            f.write(msg_str)
+
+        if self.wandb_writer is not None:
+            self.wandb_writer.log_config(config)
+
     def initialize_csv(self, file_name: str = None):
         file_name = P(self.log_path) / file_name if file_name is not None else P(self.log_path) / "metrics.csv"
         self.csv_writer = CSVWriter(file_name)
@@ -458,6 +473,9 @@ class WandBWriter(object):
             print_('Logging failed: ', e)
             return False
         return True
+    
+    def log_config(self, config: Dict[str, Any]) -> None:
+        self.run.config.update(config)
     
     def log_image(self, name: str, image: Union[torch.Tensor, np.array], step: Optional[int]=None) -> None:
         """
