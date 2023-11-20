@@ -135,6 +135,21 @@ def load_model_from_checkpoint(exp_name,
         print_(f'Exception: {e}', 'error')
         return
     print_(f'Model checkpoint was load from: {cp_dir}')
+
+def load_model_from_path(path: str, model: torch.nn.Model, optimizer=None, scheduler=None, device: str = 'cpu'):
+    try:
+        data = torch.load(path, map_location=torch.device(device))
+        model.load_state_dict(data['model_state_dict'])
+
+        if optimizer is not None:
+            optimizer.load_state_dict(data['optimizer_state_dict'])
+        if scheduler is not None:
+            scheduler.load_state_dict(data['scheduler_state_dict'])
+    except Exception as e:
+        print_(f'Checkpoint could not been load from: {path}', 'error')
+        print_(f'Exception: {e}', 'error')
+        return
+    print_(f'Model checkpoint was load from: {path}')
     
 
 ###--- Data ---###
