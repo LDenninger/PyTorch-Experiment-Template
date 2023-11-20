@@ -19,6 +19,7 @@ from datetime import datetime
 import os
 import git
 from pathlib import Path as P
+import csv
 
 
 #####===== Logging Decorators =====#####
@@ -201,128 +202,75 @@ def save_checkpoint(model, optimizer, scheduler, epoch, save_path, finished=Fals
 #####===== Logger Modules =====#####
 
 class Logger(object):
-
-
-
-    def __init__(self, 
-                  exp_name: Optional[str] = None,
-                   run_name: Optional[str] = None,
-                    log_to_file: Optional[bool]=True,
-                     log_file_name: Optional[str] = 'log.txt',
-                      log_internal: Optional[bool] = False,
-                       plot_path: Optional[str] = None,
-                        checkpoint_path: Optional[str] = None,
-                         log_path: Optional[str] = None,
-                          visualization_path: Optional[str] = None) -> None:
-        """
-            Initialize the logger.
-
-            Arguments:
-                exp_name [str]: Name of the experiment within the local project.
-                run_name [str]: Name of the run within the experiment.
-                log_file_name Optional[str]: Name of the log file.
-        """
-        import wandb
-        wandb.login()
-        if exp_name is not None and run_name is not None:
-            self.initialize(exp_name, run_name,log_to_file, log_file_name, log_internal, plot_path, checkpoint_path,log_path,visualization_path)
-            self.run_initialized = True
-        else:
-            self.run_initialized = False  
-
-        global LOGGER
-        LOGGER = self          
-
-
-    def initialize(self,
-                    exp_name: str,
-                     run_name: str,
-                      log_to_file: Optional[bool]=True,
-                       log_file_name: Optional[str] = 'log.txt',
-                        log_internal: Optional[bool] = False,
-                         plot_path: Optional[str] = None,
-                          checkpoint_path: Optional[str] = None,
-                           log_path: Optional[str] = None,
-                            visualization_path: Optional[str] = None) -> None:
-        ##-- Experiment Meta Data --##
+    def __init__(self, exp_name: Optional[str] = None, run_name: Optional[str] = None, exp_path: Optional[str] = None):
+        assert (exp_name is not None and run_name is not None) or exp_path is not None, "ERROR: Please provide either an experiment and run name or an experiment path"
         self.exp_name = exp_name
         self.run_name = run_name
-        self.run_path = P('experiments') / self.exp_name / self.run_name
-        ##-- Logging Parameters --##
-        self.log_to_file_activated = log_to_file
-        self.log_internal_activated = log_internal
-        self.log_external = False
-        self._internal_log_dir = {}
+        self.exp_path = exp_path
+        self.base_path = P('experiments') if P(exp_path) is None else exp_path
+
         ##-- Logging Paths --##
-        self.plot_path = self.run_path / "plots" if plot_path is None else plot_path
-        self.log_path = self.run_path / "logs" if log_path is None else log_path
-        self.log_file_path = self.log_path / log_file_name
+        if self.exp_name is not None and self.run_name is not None:
+            self.run_path = self.base_path / self.exp_name / self.run_name
+        else:
+            self.run_path = self.base_path
+        self.plot_path = self.run_path / "plots" 
+        if not os.path.exists(str(self.plot_path)):
+            os.makedirs(str(self.plot_path))
+        self.log_path = self.run_path / "logs"
+        if not os.path.exists(str(self.log_path)):
+            os.makedirs(str(self.log_path))
+        self.vis_path = self.run_path / "visualizations" 
+        if not os.path.exists(str(self.vis_path)):
+            os.makedirs(str(self.vis_path))
+        self.checkpoint_path = self.run_path / "checkpoints"
+        if not os.path.exists(str(self.checkpoint_path)):
+            os.makedirs(str(self.checkpoint_path))
+        self.log_file_path = self.log_path / 'log.txt'
         if os.path.exists(self.log_file_path):
             os.remove(self.log_file_path)
-        self.vis_path = self.run_path / "visualizations" if visualization_path is None else visualization_path
-        self.checkpoint_path = self.run_path / "checkpoints" if checkpoint_path is None else checkpoint_path
-        self.run_initialized = True
 
-    def initialize_logging(self,
-                              project_name: str,
-                               entity: Optional[str]=None,
-                                config: Optional[Union[Dict, str, None]]=None,
-                                 group: Optional[str]=None,
-                                  job_type: Optional[str]=None,
-                                   resume: Optional[Literal['allow','must','never','auto',None]]= None,
-                                    mode: Optional[Literal['offline','online','disabled']]='online'
-                            ) -> None:
-        """
-            Initialize logging using WandB.
+        ##-- Writer Modules --##
+        self.csv_writer = None
+        self.wandb_writer = None
+        self.tb_writer = None
+        self.internal_writer = None
+    
+    def log(self, data: Dict[str, Any], step: Optional[int]=None) -> bool:
+        if self.csv_writer is not None:
+            self.csv_writer.log(data, step)
+        if self.wandb_writer is not None:
+            self.wandb_writer.log(data, step)
+        if self.tb_writer is not None:
+            self.tb_writer.log(data, step)
+        if self.internal_writer is not None:
+            self.internal_writer.log(data, step)
 
-            Arguments:
-                project_name [str]: Name of the project within WandB.
-                entity Optional[str]: Name of the group or user to record the data to.
-                config Optional[Union[Dict, str, None]]: Configuration of the run.
-                group Optional[str]: Name of the group of runs to group runs within a project.
-                job_type Optional[str]: Type of the job to give extra information about the run.
-                resume Optional[Literal['allow','must','never','auto',None]]: Option to resume a previously logged run.
-                mode Optional[Literal['offline','online','disabled']]: Flag to determine if and where data is logged to.
-        
-        """
-        self.run = wandb.init(
-                    project=project_name,
-                    name=(self.exp_name+'/'+self.run_name),
-                    entity=entity,
-                    config=config,
-                    group=group,
-                    job_type=job_type,
-                    resume=resume,
-                    mode=mode,
-        )
-        self.log_external = True
-        log_str = 'WandB initialized\n'
-        log_str += f'project_name: {project_name}, entity: {entity}, group: {group}, job_type: {job_type}, resume: {resume}, mode: {mode}'
-        self.log_info(log_str, message_type="info")
-        self.log_config(config)
-
-    def finish_logging(self) -> None:
-        """
-            Finish logging using WandB.
-        """
+    def log_info(self, message: str, message_type: str='info') -> None:
         if not self.run_initialized:
             return
-        wandb.finish()
-        self.log_external = False
-        log_str = 'WandB logging finished\n'
-        print_(log_str, message_type="info")
+        cur_time = self._get_datetime()
+        msg_str = f'{cur_time}   [{message_type}]: {message}\n'
+        with open(self.log_file_path, 'a') as f:
+            f.write(msg_str)  
+
+    def initialize_csv(self, file_name: str = None):
+        file_name = P(self.log_path) / file_name if file_name is not None else P(self.log_path) / "metrics.csv"
+        self.csv_writer = CSVWriter(file_name)
     
-    def watch_model(self, model: torch.nn.Module, log: Optional[Literal['gradients', 'parameters', 'all']] = "gradients"):
-        if not self.log_external:
-            print_('Cannot watch model without WandB', 'warn')
-            return
-        self.run.watch(
-            model,
-            log=log
-        )
+    def initialize_wandb(self, project_name: str, **kwargs):
+        if self.exp_name is not None and self.run_name is not None:
+            name = f"{self.exp_name}/{self.run_name}"
+        else:
+            name = self.run_path.stem
+        self.wandb_writer = WandBWriter(name, project_name, **kwargs)
 
-    ###--- Data Retrieval Functions ---###
-
+    def initialize_tensorboard(self, **kwargs):
+        raise NotImplementedError('Tensorboard is not implemented yet')
+    
+    def initialize_internal(self, **kwargs):
+        self.internal_writer = MetricTracker(**kwargs)
+    
     def get_path(self, name: Optional[Literal['log', 'plot', 'checkpoint', 'visualization']] = None) -> str:
         """
             Get the path to the specified directory.
@@ -346,301 +294,90 @@ class Logger(object):
             return self.checkpoint_path
         elif name == 'visualization':
             return self.vis_path
-
-    def get_internal_log(self, name: Optional[str]=None) -> Union[Dict, list, None]:
-        """
-            Get logs from the internally saved dictionary.
-
-            Arguments:
-                name Optional[str]: Name of the metric to retrieve. If not provided, all logs are retrieved.
-            
-        """
-        if not self.run_initialized:
-            return
-        if name is not None:
-            if name in self._internal_log_dir.keys():
-                return self._internal_log_dir[name]
-            else:
-                self.log_info(f"Internal log {name} not found", message_type='warning')
-                return None
-        return self._internal_log_dir
         
-    ###--- External Logging Functions ---###
-    # These functions log data to the WandB server.
-
-    def log(self, data: Dict[str, Any], step: Optional[int]=None) -> bool:
-        """
-            Log data to WandB.
-
-            Arguments:
-                data [Dict[str, Any]]: Data to log of form: {metric_name: value, metric_name2: value2,...}
-
-        """
-        if not self.run_initialized:
-            return False
-        
-        if self.log_external:
-            try:
-                wandb.log(data, step)
-            except Exception as e:
-                print('Logging failed: ', e)
-                return False
-        return True
-    
-    def log_image(self, name: str, image: Union[torch.Tensor, np.array], step: Optional[int]=None) -> None:
-        """
-            Log images to WandB.
-        """
-        # import ipdb; ipdb.set_trace()
-        if not self.run_initialized or not self.log_external:
-            return
-        assert len(image.shape) in [3, 4], "Please provide images of shape [H, W, C], [B, H, W, C], [C, H, W] or [B, C, H, W]"
-        if torch.is_tensor(image):
-            image = image.detach().cpu().numpy()
-        if image.shape[-1] not in [1, 3]:
-            if len(image.shape) == 3:
-                image = np.transpose(image, (1, 2, 0))
-            elif len(image.shape) == 4:
-                image = np.transpose(image, (0, 2, 3, 1))
-        try:
-            torchvision.utils.save_image(image, self.vis_path / f"{name}.png")
-        except: 
-            print_(f"Failed to save image {name} to {self.vis_path}.")
-        wandbImage = wandb.Image(image)
-        wandb.log({name: wandbImage}, step=step)
-    
-    def log_segmentation_image(self, name: str,
-                  image: Union[torch.Tensor, np.array],
-                   segmentation: Optional[Union[torch.Tensor, np.array]],
-                    ground_truth_segmentation: Optional[Union[torch.Tensor, np.array]]=None,
-                     class_labels: Optional[list] = None,
-                      step: Optional[int]=None) -> None:
-        """
-            Log a segmentation image to WandB.
-
-            Arguments:
-                image [Union[torch.Tensor, np.array]]: Image to log.
-
-        """
-        if not self.run_initialized or not self.log_external:
-            return
-        assert len(image.shape) in [3, 4], "Please provide images of shape [H, W, C], [B, H, W, C], [C, H, W] or [B, C, H, W]"
-        if torch.is_tensor(image):
-            image = image.detach().cpu().numpy()
-        if image.shape[-1] not in [1, 3]:
-            if len(image.shape) == 3:
-                image = np.transpose(image, (1, 2, 0))
-            elif len(image.shape) == 4:
-                image = np.transpose(image, (0, 2, 3, 1))
-        if torch.is_tensor(segmentation):
-            segmentation = segmentation.detach().cpu().numpy()
-        if ground_truth_segmentation is not None:
-            if class_labels is not None:
-                wandbImage = wandb.Image(image, masks={
-                    "predictions": {
-                        "mask_data": segmentation,
-                        "class_labels": class_labels
-                    },
-                    "ground_truth": {
-                        "mask_data": ground_truth_segmentation,
-                        "class_labels": class_labels
-                    }
-                    })
-            else:
-                wandbImage = wandb.Image(image, masks={
-                    "predictions": {
-                        "mask_data": segmentation,
-                    },
-                    "ground_truth": {
-                        "mask_data": ground_truth_segmentation,
-                    }
-                    })
-        else:
-            if class_labels is not None:
-                wandbImage = wandb.Image(image, masks={
-                        "predictions": {
-                            "mask_data": segmentation,
-                            "class_labels": class_labels
-                        }})
-            else:
-                wandbImage = wandb.Image(image, masks={
-                        "predictions": {
-                            "mask_data": segmentation,
-                        }})              
-        wandb.log({name: wandbImage}, step=step)
-
-
-    ###--- Internal Logging Functions ---###
-    # These functions save data to the internal storage and to the local disk.
-
-    def log_internal(self, data: Dict[str, Any]):
-        if not self.run_initialized:
-            return
-        if self.log_internal_activated:
-            for key, value in data.items():
-                if key not in self._internal_log_dir.keys():
-                    self._internal_log_dir[key] = []
-                self._internal_log_dir[key].append(value)
-
-    def log_info(self, message: str, message_type: str='info') -> None:
-        if not self.run_initialized:
-            return
-        cur_time = self._get_datetime()
-        msg_str = f'{cur_time}   [{message_type}]: {message}\n'
-        with open(self.log_file_path, 'a') as f:
-            f.write(msg_str)            
-
-    def log_to_file(self, message: str, file_name: str, type: Literal['log', 'plot', 'checkpoint', 'visualization']) -> None:
-        """
-            Log a message to a specific file within the run directory.
-        """
-        path = self.get_path(type)
-        with open(path / f"{file_name}.txt", 'a') as f:
-            f.write(f'{message}\n')
-
-    def log_config(self, config: Dict[str, Any]) -> None:
-        """
-            Log configuration to the log file.
-        """
-        if not self.run_initialized:
-            return
-        cur_time = self._get_datetime()
-        msg_str = f'{cur_time}   [config]:\n'
-        msg_str += '\n'.join([f'  {k}: {v}' for k,v in config.items()])
-
-        with open(self.log_file_path, 'a') as f:
-            f.write(msg_str)
-    
-    def log_git_hash(self) -> None:
-        if not self.run_initialized:
-            return
-        hash = get_current_git_hash()
-        self.log_info(f'git hash: {hash}')
-
-    def log_architecture(self, model: nn.Module) -> None:
-        if not self.run_initialized:
-            return
-        save_path = P(self.log_file_path) / "architecture.txt"
-        log_architecture(model=model, save_path=save_path)
-
-    def save_checkpoint(self, model: nn.Module, optimizer, scheduler, epoch: int, finished: bool = False) -> None:
-        if not self.run_initialized:
-            return
-        save_path = P(self.run_path) / "checkpoints"
-        save_checkpoint(model=model, optimizer=optimizer, scheduler=scheduler, epoch=epoch, save_path=save_path, finished=finished)
-
-    def dump_dictionary(self, data: Dict[str, Any], file_name: str):
-        if not self.run_initialized:
-            return
-        save_path = P(self.log_path) / file_name
-        with open(save_path, 'w') as f:
-            json.dump(data, f)
-
     def _get_datetime(self) -> str:
         return datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
-    
-###--- Tensorboard Logger ---###
-# This logger was taken from: https://github.com/angelvillar96/TemplaTorch/tree/master
-    
-class LoggerTB():
+
+class CSVWriter(object):
     """
-    Class that instanciates a Logger object to write logs into a file
-
-    Args:
-    -----
-    exp_path: string
-        path to the root directory of an experiment where the logs are saved
-    file_name: string
-        name of the file where logs are stored
+        A small module to dynamically log metrics to a csv file.
     """
+    def __init__(self, file_name: str, overwrite: Optional[bool] = True):
+        if os.path.exists(file_name) and overwrite is False:
+            i = 1
+            file_name = P(file_name)
+            file_dir = file_name.parent
+            raw_name = file_name.stem
+            while os.path.exists(str(file_dir / (raw_name+f"-{i}.csv"))):
+                if i == 100:
+                    print_(f"ERROR: CSV Writer, too many log files exist, please override...")
+                    return
+                i += 1
+            file_name = str(file_dir / (raw_name+f"-{i}.csv"))
+        self.file_name = file_name
+        self.tracked_metrics = {"step": 0}
 
-    def __init__(self, exp_path, file_name="logs.txt"):
-        """
-        Initializer of the logger object
-        """
+        with open(self.file_name, 'w') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(self.tracked_metrics.keys())
 
-        logs_path = os.path.join(exp_path, file_name)
-        self.logs_path = logs_path
+    def log(self, data: Dict[str, Any], step: Optional[int]=None) -> None:
 
-        global LOGGER
-        LOGGER = self
+        data_to_write = [step]+[None]*(len(self.tracked_metrics)-1)
+        col_to_update = []
 
-        return
+        for key, value in data.items():
+            if key not in self.tracked_metrics:
+                col_to_update.append(key)
+            else:
+                data_to_write[self.tracked_metrics[key]] = value
+        
+        if len(col_to_update) > 0:
+            try:
+                self.update_file(col_to_update)
+            except Exception as e:
+                print_(f"ERROR: CSV Writer, unable to update file: \n{e}")
+                return False
+            for name in col_to_update:
+                data_to_write[self.tracked_metrics[name]] = data[name]
+        try:
+            with open(self.file_name, 'w') as csvfile:
+                writer = csv.Writer(csvfile)
+                writer.writerow(data_to_write)
+        except Exception as e:
+            print_(f"ERROR: CSV Writer, unable to write to file: {e}")
+            return False
+        return True
 
-    def log_git_hash(self):
-        """ Logging git hash"""
-        hash = get_current_git_hash()
-        log_info(f"Using git sha: {hash}")
-        return
+    def update_file(self, new_columns: List[str]):
+        with open(self.file_name, 'r') as csvfile:
+            csv_reader = csv.reader(csvfile)
+            # Read the existing content
+            data = list(csv_reader)
+            header = data[0]
 
-    def log_info(self, message, message_type="info", **kwargs):
-        """
-        Logging a message into the file
-        """
+        for i, name in enumerate(new_columns):
+            self.tracked_metrics[name] = len(header)+i+1
+        header += new_columns
+        data[0] = header
 
-        if(message_type not in ["new_exp", "info", "warning", "error", "params"]):
-            message_type = "info"
-        cur_time = self._get_datetime()
-        format_message = self._format_message(message=message, cur_time=cur_time,
-                                              message_type=message_type)
-        with open(self.logs_path, 'a') as f:
-            f.write(format_message)
-
-        if(message_type == "error"):
-            exit()
-
-        return
-
-    def log_params(self, params):
-        """
-        Logging parameters so that it is visually appealing
-        Args:
-        -----
-        params: dictionary
-            dictionary containing parameters and values
-        """
-
-        for param, value in params.items():
-            message = f"    {param}:{value}"
-            self.log_info(message, message_type="params")
-
-        return
-
-    def _format_message(self, message, cur_time, message_type="info"):
-        """
-        Formatting the message to have a standarizied template
-        """
-        pre_string = ""
-        if(message_type == "new_exp"):
-            pre_string = "\n\n\n"
-        form_message = f"{pre_string}{cur_time}    {message_type.upper()}: {message}\n"
-        return form_message
-
-    def _get_datetime(self):
-        """
-        Obtaining current data and time in format YYYY-MM-DD-HH-MM-SS
-        """
-        time = datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
-        return time
-#####===== Metric Tracker =====#####
+        with open(self.file_name, 'w') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerows(data)
 
 class MetricTracker:
+    """
+        A module to log metrics in RAM to easily access them and compute statistics.
+    """
     def __init__(self):
         self.metrics = {}
-        self.epoch = 1
-        self.iteration = 1
 
-    def step_iteration(self):
-        self.iteration += 1
-
-    def step_epoch(self):
-        self.epoch += 1
-
-    def log(self, metric_name: str, metric_value: float):
+    def log(self, data: Dict[str, Any]):
         """ Log a metric value"""
-        if metric_name not in self.metrics.keys():
-            self.metrics[metric_name] = []
-        self.metrics[metric_name].append(metric_value)
+        for metric_name, metric_value in data.items():
+            if metric_name not in self.metrics.keys():
+                self.metrics[metric_name] = []
+            self.metrics[metric_name].append(metric_value)
 
     def get_metric(self, metric_name: Optional[str] = None):
         if metric_name is None:
@@ -686,9 +423,116 @@ class MetricTracker:
             self.metrics[metric_name] = []
         else:
             self.metrics = {}
+
+class TensorBoardWriter(object):
+    """
+        TODO: Finish this writer
+    """
+
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+        return
+
+class WandBWriter(object):
+
+    def __init__(self, run_name: str, project_name: str, **kwargs):
+        import wandb
+        wandb.login()
+        self.run = wandb.init(project=project_name, name=run_name, **kwargs)
+
+    def log(self, data: Dict[str, Any], step: Optional[int]=None) -> bool:
+        """
+            Log data to WandB.
+
+            Arguments:
+                data [Dict[str, Any]]: Data to log of form: {metric_name: value, metric_name2: value2,...}
+
+        """
+        
+        try:
+            wandb.log(data, step)
+        except Exception as e:
+            print_('Logging failed: ', e)
+            return False
+        return True
     
+    def log_image(self, name: str, image: Union[torch.Tensor, np.array], step: Optional[int]=None) -> None:
+        """
+            Log images to WandB.
+        """
+        # import ipdb; ipdb.set_trace()
+        assert len(image.shape) in [3, 4], "Please provide images of shape [H, W, C], [B, H, W, C], [C, H, W] or [B, C, H, W]"
+        if torch.is_tensor(image):
+            image = image.detach().cpu().numpy()
+        if image.shape[-1] not in [1, 3]:
+            if len(image.shape) == 3:
+                image = np.transpose(image, (1, 2, 0))
+            elif len(image.shape) == 4:
+                image = np.transpose(image, (0, 2, 3, 1))
+        try:
+            torchvision.utils.save_image(image, self.vis_path / f"{name}.png")
+        except: 
+            print_(f"Failed to save image {name} to {self.vis_path}.")
+        wandbImage = wandb.Image(image)
+        wandb.log({name: wandbImage}, step=step)
+    
+    def log_segmentation_image(self, name: str,
+                  image: Union[torch.Tensor, np.array],
+                   segmentation: Optional[Union[torch.Tensor, np.array]],
+                    ground_truth_segmentation: Optional[Union[torch.Tensor, np.array]]=None,
+                     class_labels: Optional[list] = None,
+                      step: Optional[int]=None) -> None:
+        """
+            Log a segmentation image to WandB.
 
-#####===== Global Logger =====#####
-# This logger should be used throughout the project
+            Arguments:
+                image [Union[torch.Tensor, np.array]]: Image to log.
 
+        """
+        assert len(image.shape) in [3, 4], "Please provide images of shape [H, W, C], [B, H, W, C], [C, H, W] or [B, C, H, W]"
+        if torch.is_tensor(image):
+            image = image.detach().cpu().numpy()
+        if image.shape[-1] not in [1, 3]:
+            if len(image.shape) == 3:
+                image = np.transpose(image, (1, 2, 0))
+            elif len(image.shape) == 4:
+                image = np.transpose(image, (0, 2, 3, 1))
+        if torch.is_tensor(segmentation):
+            segmentation = segmentation.detach().cpu().numpy()
+        if ground_truth_segmentation is not None:
+            if class_labels is not None:
+                wandbImage = wandb.Image(image, masks={
+                    "predictions": {
+                        "mask_data": segmentation,
+                        "class_labels": class_labels
+                    },
+                    "ground_truth": {
+                        "mask_data": ground_truth_segmentation,
+                        "class_labels": class_labels
+                    }
+                    })
+            else:
+                wandbImage = wandb.Image(image, masks={
+                    "predictions": {
+                        "mask_data": segmentation,
+                    },
+                    "ground_truth": {
+                        "mask_data": ground_truth_segmentation,
+                    }
+                    })
+        else:
+            if class_labels is not None:
+                wandbImage = wandb.Image(image, masks={
+                        "predictions": {
+                            "mask_data": segmentation,
+                            "class_labels": class_labels
+                        }})
+            else:
+                wandbImage = wandb.Image(image, masks={
+                        "predictions": {
+                            "mask_data": segmentation,
+                        }})              
+        wandb.log({name: wandbImage}, step=step)
+
+    
 LOGGER = None
