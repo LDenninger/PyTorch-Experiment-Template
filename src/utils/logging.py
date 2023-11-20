@@ -160,7 +160,7 @@ def log_module(module, save_path, append=True):
     return
 
 @log_function
-def save_checkpoint(model, optimizer, scheduler, epoch, save_path, finished=False, savename=None):
+def save_checkpoint(model, epoch, optimizer=None, scheduler=None, save_path=None, finished=False, savename=None):
     """
     Saving a checkpoint in the models directory of the experiment. This checkpoint
     contains state_dicts for the mode, optimizer and lr_scheduler
@@ -184,19 +184,30 @@ def save_checkpoint(model, optimizer, scheduler, epoch, save_path, finished=Fals
         checkpoint_name = "checkpoint_epoch_final.pth"
     else:
         checkpoint_name = f"checkpoint_epoch_{epoch}.pth"
+    if save_path is None:
+        if LOGGER is not None:
+            save_path = LOGGER.get_path('checkpoint')
+        else:
+            print_("Please provide a save path to save checkpoints", 'error')
+            return False
 
     savepath = os.path.join(save_path, checkpoint_name)
 
     scheduler_data = "" if scheduler is None else scheduler.state_dict()
-    torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            "scheduler_state_dict": scheduler_data
-            }, savepath)
+    data = {'epoch': epoch, 'model_state_dict': model.state_dict()}
+    if optimizer is not None:
+        data['optimizer_state_dict'] = optimizer.state_dict()
+    if scheduler is not None:
+        data['scheduler_state_dict'] = scheduler.state_dict()
+
+    try:
+        torch.save(data, savepath)
+    except Exception as e:
+        print_(f"Could not save checkpoint to {savepath}. \n{e}", 'error')
+        return False
     print_(f'Checkpoint was saved to: {savepath}')
 
-    return
+    return True
 
 
 #####===== Logger Modules =====#####
