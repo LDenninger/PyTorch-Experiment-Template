@@ -442,6 +442,16 @@ class Logger(object):
         if self.wandb_writer is not None:
             self.wandb_writer.log_segmentation_image(name, image, segmentation, ground_truth_segmentation, class_labels, step)
 
+    def save_checkpoint(self,  epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer=None, scheduler=None):
+
+        save_checkpoint(
+            epoch=epoch,
+            model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            save_path=self.checkpoint_path
+        )
+
 
     ##-- Initialization Functions --##
 
@@ -783,6 +793,40 @@ class WandBWriter(object):
                             "mask_data": segmentation,
                         }})              
         wandb.log({name: wandbImage}, step=step)
+
+class MetricTracker(object):
+    """ Manages and stores different metrics """
+
+    def __init__(self):
+        self.metrics = None
+        self.reset()
+
+    def reset(self):
+        self.metrics = {}
+
+    def update(self, name:str, val:Union[float,int, List[Union[float,int]]])->None:
+        if name not in self.metrics:
+            i = 1 if type(val)!=list else len(val)
+            self.metrics[name] = AverageMeter(i)
+        self.metrics[name].update(val)
+
+    def get_average(self, name:str=None) -> Union[float,Dict[str,float], List[float]]:
+        if name is None:
+            ret_dict = {}
+            for name, meter in self.metrics.items():
+                ret_dict[name] = meter.avg
+            return ret_dict
+        return self.metrics[name].avg
+    
+    def get_sum(self, name:str=None) -> Union[float,Dict[str,float],List[float]]:
+        if name is None:
+            ret_dict = {}
+            for name, meter in self.metrics.items():
+                ret_dict[name] = meter.sum
+            return ret_dict
+        return self.metrics[name].sum
+
+
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

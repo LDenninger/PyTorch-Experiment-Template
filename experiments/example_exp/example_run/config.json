@@ -1,6 +1,9 @@
 {
     "num_epochs": 100,
     "evaluation_frequency": 5,
-    "batch_size": 64,
-    "save_frequency": 10
+    "batch_size": 32,
+    "save_frequency": 10,
+    "learning_rate": 3e-04,
+    "scheduler_patience": 5,
+    "scheduler_factor": 0.1
 }
