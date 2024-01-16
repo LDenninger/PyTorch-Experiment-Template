@@ -12,6 +12,7 @@ import numpy as np
 import json
 import torch
 import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
 import torchvision
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union, Literal
 import traceback
@@ -20,6 +21,43 @@ import os
 import git
 from pathlib import Path as P
 import csv
+import wandb
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+
+#####===== Parameters =====#####
+color_mapping = {
+    0: (255, 0, 0),       # Red
+    1: (0, 255, 0),       # Green
+    2: (0, 0, 255),       # Blue
+    3: (255, 255, 0),     # Yellow
+    4: (255, 0, 255),     # Magenta
+    5: (0, 255, 255),     # Cyan
+    6: (255, 165, 0),     # Orange
+    7: (128, 0, 128),     # Purple
+    8: (0, 128, 0),       # Dark Green
+    9: (128, 0, 0),       # Maroon
+    10: (0, 128, 128),    # Teal
+    11: (128, 128, 0),    # Olive
+    12: (184, 134, 11),   # Dark Goldenrod
+    13: (138, 43, 226),   # Blue Violet
+    14: (165, 42, 42),    # Brown
+    15: (95, 158, 160),   # Cadet Blue
+    16: (255, 105, 180),  # Hot Pink
+    17: (50, 205, 50),    # Lime Green
+    18: (153, 50, 204),   # Dark Orchid
+    19: (0, 206, 209),    # Dark Turquoise
+    20: (220, 20, 60),    # Crimson
+    21: (70, 130, 180),   # Steel Blue
+    22: (46, 139, 87),    # Sea Green
+    23: (255, 69, 0),     # Red-Orange
+    24: (0, 100, 0),      # Dark Green
+    25: (128, 128, 0),    # Olive
+    26: (128, 0, 128),    # Purple
+    27: (0, 139, 139),    # Dark Cyan
+    28: (210, 105, 30),   # Chocolate
+    29: (255, 165, 79)    # Peach
+}
 
 
 #####===== Logging Decorators =====#####
@@ -209,7 +247,67 @@ def save_checkpoint(epoch, model=None, optimizer=None, scheduler=None, save_path
     print_(f'Checkpoint was saved to: {savepath}')
 
     return True
+#####===== Visualization Functions =====#####
+def visualize_segmentation(
+                image: Union[torch.Tensor, np.array],
+                   segmentation: Optional[Union[torch.Tensor, np.array]],
+                    ground_truth_segmentation: Optional[Union[torch.Tensor, np.array]]=None,
+                     class_labels: Optional[list] = None):
 
+    def _add_img(img, ax):
+        ax.imshow(img)
+        ax.axis('off')
+    def _map_segmentation(img):
+
+        segImg = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint)
+        for id in range(classes):
+            mask = (img == id)
+            segImg[mask.squeeze()] = color_mapping[id]
+        return segImg
+
+    inclGT = False
+    cols = 2
+    rows = image.shape[0]
+    classes = np.max(segmentation) if class_labels is None else len(class_labels)
+
+    if ground_truth_segmentation is not None:
+        assert image.shape[0] == ground_truth_segmentation.shape[0], "Must provide the same number of images and ground truth segmentations"
+        inclGT = True
+        cols = 3
+
+    fig = plt.figure()
+
+    ind = 1
+    for i in range(image.shape[0]):
+        img = image[i]
+        ax = fig.add_subplot(rows, cols, ind)
+        _add_img(img, ax)
+        ind += 1
+        if i == 0:
+            ax.set_title(f"Original Image")
+
+        seg = segmentation[i]
+        seg = _map_segmentation(seg)
+        ax = fig.add_subplot(rows, cols, ind)
+        _add_img(seg, ax)
+        ind += 1
+        if i == 0:
+            ax.set_title(f"Segmentation")
+
+        if inclGT:
+            gt_seg = ground_truth_segmentation[i]
+            gt_seg = _map_segmentation(gt_seg)
+            ax = fig.add_subplot(rows, cols, ind)
+            _add_img(gt_seg, ax)
+            ind += 1
+            if i == 0:
+                ax.set_title(f"Ground Truth")
+
+    if class_labels is not None:
+        legend_patches = [Patch(color=(rgb_values[0]/255,rgb_values[1]/255,rgb_values[2]/255,1.0), label=f'Index {index}') for index, rgb_values in list(color_mapping.items())[:classes]]
+        fig.legend(handles=legend_patches, bbox_to_anchor=(0.5, -0.15), loc='upper center', borderaxespad=0., ncol=5)
+    plt.tight_layout()
+    return fig
 
 #####===== Logger Modules =====#####
 
@@ -219,7 +317,7 @@ class Logger(object):
         self.exp_name = exp_name
         self.run_name = run_name
         self.exp_path = exp_path
-        self.base_path = P('experiments') if P(exp_path) is None else exp_path
+        self.base_path = P('experiments') if exp_path is None else P(exp_path)
 
         ##-- Logging Paths --##
         if self.exp_name is not None and self.run_name is not None:
@@ -251,6 +349,7 @@ class Logger(object):
         global LOGGER
         LOGGER = self
     
+    ##-- Logging Functions --##
     def log(self, data: Dict[str, Any], step: Optional[int]=None) -> bool:
         if self.csv_writer is not None:
             self.csv_writer.log(data, step)
@@ -262,8 +361,6 @@ class Logger(object):
             self.internal_writer.log(data, step)
 
     def log_info(self, message: str, message_type: str='info') -> None:
-        if not self.run_initialized:
-            return
         cur_time = self._get_datetime()
         msg_str = f'{cur_time}   [{message_type}]: {message}\n'
         with open(self.log_file_path, 'a') as f:
@@ -284,10 +381,23 @@ class Logger(object):
         if self.wandb_writer is not None:
             self.wandb_writer.log_config(config)
 
+    def log_architecture(self, model: torch.nn.Module) -> None:
+        """ Log the model architecture. """
+        savePath = str(P(self.log_path) / "architecture.txt")
+        log_architecture(model, savePath)
+    
+    def log_git_hash(self) -> None:
+        gitHash = get_current_git_hash()
+        with open(self.log_path / 'git_hash.txt', 'w') as f:
+            f.write(gitHash)
+
     def log_image(self, name: str, image: Union[torch.tensor, np.array], step: Optional[int] = None) -> None:
+
+        savePath = str(P(self.vis_path) / (name+'.png'))
+        plt.imsave(savePath, image)
         if self.wandb_writer is not None:
             self.wandb_writer.log_image(name, image, step)
-        if self.tb_writer is not None:
+        if self.tb_writer is not None and False:
             self.tb_writer.log_image(name, image, step)
 
     def log_histograms(self, name: str, values: Union[np.array, torch.tensor]):
@@ -295,6 +405,45 @@ class Logger(object):
             values = values.cpu().numpy()
         if self.wandb_writer is not None:
             self.wandb_writer.log_histogram(name, values)
+
+    def log_segmentation_image(self,
+                  image: Union[torch.Tensor, np.array],
+                   segmentation: Optional[Union[torch.Tensor, np.array]],
+                    ground_truth_segmentation: Optional[Union[torch.Tensor, np.array]]=None,
+                     class_labels: Optional[list] = None,
+                      name: Optional[str] = None,
+                       step: Optional[int]=None) -> None:
+        """ 
+            Save segmentation images.
+            Images are assumed to be given with a batch dimension.
+            Images should be provided in a (height,width,channels) format.
+
+            Arguments:
+            ----------
+            @param image: the original image
+            @param segmentation: the predicted segmentation
+            @param ground_truth_segmentation: the ground truth segmentation
+            @param class_labels: the class labels
+            @param step: the current step
+        """
+        assert image.shape[0] == segmentation.shape[0], "Must provide the same number of images and segmentations"
+
+        ##-- Local Visualization --##
+        fig = visualize_segmentation(image, segmentation, ground_truth_segmentation, class_labels)
+        if name is not None:
+            fileName = name +'.png'
+        elif step is not None:
+            fileName = f'segmentation_{step}.png'
+        else:
+            fileName = f'segmentation.png'
+        savePath = str(P(self.vis_path) / fileName)
+        fig.savefig(savePath)
+
+        if self.wandb_writer is not None:
+            self.wandb_writer.log_segmentation_image(name, image, segmentation, ground_truth_segmentation, class_labels, step)
+
+
+    ##-- Initialization Functions --##
 
     def initialize_csv(self, file_name: str = None):
         file_name = P(self.log_path) / file_name if file_name is not None else P(self.log_path) / "metrics.csv"
@@ -308,7 +457,7 @@ class Logger(object):
         self.wandb_writer = WandBWriter(name, project_name, **kwargs)
 
     def initialize_tensorboard(self, **kwargs):
-        raise NotImplementedError('Tensorboard is not implemented yet')
+        self.tb_writer = TensorboardWriter(self.log_path, **kwargs)
     
     def initialize_internal(self, **kwargs):
         self.internal_writer = MetricTracker(**kwargs)
@@ -466,19 +615,68 @@ class MetricTracker:
         else:
             self.metrics = {}
 
-class TensorBoardWriter(object):
+class TensorboardWriter:
     """
-        TODO: Finish this writer
+    Class for handling the tensorboard logger
+
+    Args:
+    -----
+    logdir: string
+        path where the tensorboard logs will be stored
     """
 
-    def __init__(self, file_path: str):
-        self.file_path = file_path
+    def __init__(self, logdir):
+        """ Initializing tensorboard writer """
+        self.logdir = logdir
+        self.writer = SummaryWriter(logdir)
+        return
+
+    def add_scalar(self, name, val, step):
+        """ Adding a scalar for plot """
+        self.writer.add_scalar(name, val, step)
+        return
+
+    def add_scalars(self, plot_name, val_names, vals, step):
+        """ Adding several values in one plot """
+        val_dict = {val_name: val for (val_name, val) in zip(val_names, vals)}
+        self.writer.add_scalars(plot_name, val_dict, step)
+        return
+
+    def add_image(self, fig_name, img_grid, step):
+        """ Adding a new step image to a figure """
+        self.writer.add_image(fig_name, img_grid, global_step=step)
+        return
+
+    def add_figure(self, tag, figure, step):
+        """ Adding a whole new figure to the tensorboard """
+        self.writer.add_figure(tag=tag, figure=figure, global_step=step)
+        return
+
+    def add_graph(self, model, input):
+        """ Logging model graph to tensorboard """
+        self.writer.add_graph(model, input_to_model=input)
+        return
+
+    def log_full_dictionary(self, dict, step, plot_name="Losses", dir=None):
+        """
+        Logging a bunch of losses into the Tensorboard. Logging each of them into
+        its independent plot and into a joined plot
+        """
+        if dir is not None:
+            dict = {f"{dir}/{key}": val for key, val in dict.items()}
+        else:
+            dict = {key: val for key, val in dict.items()}
+
+        for key, val in dict.items():
+            self.add_scalar(name=key, val=val, step=step)
+
+        plot_name = f"{dir}/{plot_name}" if dir is not None else key
+        self.add_scalars(plot_name=plot_name, val_names=dict.keys(), vals=dict.values(), step=step)
         return
 
 class WandBWriter(object):
 
     def __init__(self, run_name: str, project_name: str, **kwargs):
-        import wandb
         wandb.login()
         self.run = wandb.init(project=project_name, name=run_name, **kwargs)
 
