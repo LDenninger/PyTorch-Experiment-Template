@@ -9,9 +9,11 @@ from torch.utils.data import DataLoader
 import numpy as np
 from tqdm import tqdm
 
-from models import UNet
+from models import UNet, R2UNet
 from utils.management import load_config_from_run, load_model_from_path
 from utils.logging import print_, Logger, MetricTracker, LOGGER
+from utils.losses import cross_entropy2d
+from data import CityScapesLoader
 
 class Trainer(object):
 
@@ -51,14 +53,23 @@ class Trainer(object):
         target_transform = v2.Compose([v2.ToTensor(),transforms.Resize((128, 256), antialias=True)])
         ##-- Train Dataset --##
         if train:
-            train_dataset = datasets.Cityscapes(
-                root='./data',
-                split='train',
-                mode='fine',
-                target_type='semantic',
-                transform=input_transforms,
-                target_transform=target_transform
-            )
+            if self.config['dataset'].lower() == 'cityscapes':
+                train_dataset = datasets.Cityscapes(
+                    root='./data/CityScapes',
+                    split='train',
+                    mode='fine',
+                    target_type='semantic',
+                    transform=input_transforms,
+                    target_transform=target_transform
+                )
+            elif self.config['dataset'].lower() == 'cityscapes_custom':
+                train_dataset = CityScapesLoader(
+                    root='./data/CityScapes',
+                    split='train'
+                )
+            else:
+                raise ValueError(f"Dataset {self.config['dataset']} not recognized.")
+            
             self.train_loader = DataLoader(
                 dataset=train_dataset,
                 batch_size = self.config['batch_size'],
@@ -69,13 +80,22 @@ class Trainer(object):
 
         ##-- Evaluation Dataset --##
         if eval:
-            eval_dataset = datasets.Cityscapes(
-                root='./data',
-                split='val',
-                mode='coarse',
-                transform=input_transforms,
-                target_transform=target_transform
-            )
+            if self.config['dataset'].lower() == 'cityscapes':
+                eval_dataset = datasets.Cityscapes(
+                    root='./data/CityScapes',
+                    split='val',
+                    mode='coarse',
+                    transform=input_transforms,
+                    target_transform=target_transform
+                )
+            elif self.config['dataset'].lower() == 'cityscapes_custom':
+                eval_dataset = CityScapesLoader(
+                    root='./data/CityScapes',
+                    split='val'
+                )
+            else:
+                raise ValueError(f"Dataset {self.config['dataset']} not recognized.")
+            
             self.eval_loader = DataLoader(
                 dataset=eval_dataset,
                 batch_size = self.config['batch_size'],
@@ -83,8 +103,16 @@ class Trainer(object):
                 num_workers=4,
                 drop_last=True
             )
+
     def initialize_model(self, checkpoint_path:str=None):
-        self.model = UNet(n_channels=3, n_classes=30)
+        """ Initialize the model according to the config. """
+        if self.config['model'].lower() == 'unet':
+            self.model = UNet(n_channels=3, n_classes=self.config['num_classes'])
+        elif self.config['model'].lower() == 'r2unet':
+            self.model = R2UNet()
+        else:
+            raise ValueError(f"Model {self.config['model']} not recognized.")
+        
         self.model = self.model.to(self.device)
         if checkpoint_path:
             load_model_from_path(checkpoint_path, self.model, device=self.device)
@@ -100,7 +128,10 @@ class Trainer(object):
             factor=self.config['scheduler_factor'],
             patience=self.config['scheduler_patience']
         )
-        self.criterion = nn.CrossEntropyLoss()
+        if self.config['loss'].lower() == 'cross_entropy':
+            self.criterion = nn.CrossEntropyLoss()
+        elif self.config['loss'].lower() == 'cross_entropy2d':
+            self.criterion = cross_entropy2d
 
     def initialize_logging(self):
         """
@@ -135,7 +166,7 @@ class Trainer(object):
             # Train the model
             self.train_epoch()
             # Save a model checkpoint in regular intervals
-            if (epoch+1) % self.config['eval_interval'] == 0:
+            if (epoch+1) % self.config['save_frequency'] == 0:
                 self.logger.save_checkpoint(
                     epoch=epoch+1,
                     model=self.model,
@@ -153,14 +184,22 @@ class Trainer(object):
         # Initialize the training
         self.model.train()
         self.metrics.reset()
-
+        print_('\nTraining:')
         for i, (img, target) in progress_bar:
             if i == length:
                 break
+
+            # One-hot encode the target image if we use the PyTorch dataset
+            if self.config['dataset'].lower() == 'cityscapes':
+                target_shape = target.shape
+                target = F.one_hot(torch.flatten(target.permute(0,2,3,1)).to(dtype=torch.int64), num_classes=self.config['num_classes'])
+                target = torch.reshape(target, (target_shape[0], target_shape[2], target_shape[3], self.config['num_classes']))
+                target = target.permute(0,3,1,2).to(dtype=torch.float32)
+            # Move the image and target to the device
             img = img.to(self.device)
             target = target.to(self.device)
-            target = F.one_hot(target, num_classes=30)
 
+            # Compute the model output
             pred = self.model(img)
 
             if torch.isnan(pred).any():
@@ -171,14 +210,13 @@ class Trainer(object):
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-
+            # Update progress bar in the command line
             running_loss = 0.8*running_loss + 0.2*loss.item()
             progress_bar.set_description(f'Loss: {running_loss:.4f}')
             # Log the training loss
             self.logger.log({'CrossEntropy': loss.item()}, step=self.step)
-
-
-
+            # Increment Step
+            self.step += 1
 
     ##-- Evaluation Functions --##
     @torch.no_grad()      
@@ -204,14 +242,14 @@ class Trainer(object):
             # Visualize some demonstration images for the first batch of images
  
         # Retrieve the averages over all iterations
-        accuracy = self.metrics.get_average('accuracy')
-        iou = self.metrics.get_average('iou')
-        precision = self.metrics.get_average('precision')
-        recall = self.metrics.get_average('recall')
-        dice = self.metrics.get_average('dice')
-        print_('\nEvaluation Results:')
+        accuracy = self.metrics.get_average('accuracy')[0]
+        iou = self.metrics.get_average('iou')[0]
+        precision = self.metrics.get_average('precision')[0]
+        recall = self.metrics.get_average('recall')[0]
+        dice = self.metrics.get_average('dice')[0]
+        print_('Evaluation Results:')
         print_(f'  Accuracy: \t{accuracy:.4f}')
-        print_(f'  IoU: \t{iou:.4f}')
+        print_(f'  IoU: \t\t{iou:.4f}')
         print_(f'  Precision: \t{precision:.4f}')
         print_(f'  Recall: \t{recall:.4f}')
         print_(f'  Dice: \t{dice:.4f}')
@@ -239,12 +277,16 @@ class Trainer(object):
         class_prec = []
         class_recall = []
         class_iou = []
-
-        flat_seg = torch.flatten(segmentation.permute(0,2,3,1), start_dim=0, end_dim=2)
-        flat_target = torch.flatten(target.permute(0,2,3,1), start_dim=0, end_dim=2)
-        flat_target = F.one_hot(flat_target.squeeze().to(dtype=torch.int64), num_classes=30)
+        # Compute segmentation vector
+        segmentation = torch.argmax(segmentation.permute(0,2,3,1), dim=-1).cpu().squeeze()
+        flat_seg = torch.flatten(segmentation, start_dim=0, end_dim=2)
+        flat_seg = F.one_hot(flat_seg.to(dtype=torch.int64), num_classes=self.config['num_classes'])
+        # Compute the target segmentation map
+        flat_target = torch.flatten(target.cpu().permute(0,2,3,1).squeeze(), start_dim=0, end_dim=2)
+        flat_target = torch.where(flat_target>self.config['num_classes']-1, 0, flat_target)
+        flat_target = F.one_hot(flat_target.to(dtype=torch.int64), num_classes=self.config['num_classes'])
         # Compute per class metrices
-        for id in range(30):
+        for id in range(1,self.config['num_classes']):
             class_pred = flat_seg[:,id]
             class_gt = flat_target[:,id]
 
@@ -254,11 +296,11 @@ class Trainer(object):
             fn = torch.sum(class_gt) - tp
             tn = class_pred.numel() - tp - fp - fn
             # Compute the quantitative metrics
-            acc = (tn + tp) / (tn + tp + fp + fn)
-            prec = tp / (tp + fp)
-            recall = tp / (tp + fn)
-            dice = (2*tp) / (2*tp+fp+fn)
-            iou = tp / (tp + fp + fn)
+            acc = (tn + tp) / (tn + tp + fp + fn + torch.finfo(torch.float32).eps)
+            prec = tp / (tp + fp + torch.finfo(torch.float32).eps)
+            recall = tp / (tp + fn + torch.finfo(torch.float32).eps)
+            dice = (2*tp) / (2*tp+fp+fn + torch.finfo(torch.float32).eps)
+            iou = tp / (tp + fp + fn + torch.finfo(torch.float32).eps)
 
             class_acc.append(acc)
             class_dice.append(dice)

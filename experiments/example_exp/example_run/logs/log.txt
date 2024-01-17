@@ -1,4 +1,12 @@
-2024-01-17-11:11:31   [info]: Calling: log_architecture...
-2024-01-17-11:11:40   [info]: Epoch: 1/100
-2024-01-17-11:11:41   [info]: 
+2024-01-17-15:44:30   [info]: Calling: log_architecture...
+2024-01-17-15:45:02   [info]: Epoch: 1/100
+2024-01-17-15:45:06   [info]: 
 Evaluation:
+2024-01-17-15:45:53   [info]: Evaluation Results:
+2024-01-17-15:45:53   [info]:   Accuracy: 	0.9591
+2024-01-17-15:45:53   [info]:   IoU: 		0.0066
+2024-01-17-15:45:53   [info]:   Precision: 	0.0069
+2024-01-17-15:45:53   [info]:   Recall: 	0.0370
+2024-01-17-15:45:53   [info]:   Dice: 	0.0111
+2024-01-17-15:46:04   [info]: 
+Training:

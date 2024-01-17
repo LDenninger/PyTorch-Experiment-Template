@@ -1,8 +1,12 @@
 {
+    "model": "r2unet",
+    "dataset": "cityscapes_custom",
+    "num_classes": 30,
     "num_epochs": 100,
     "evaluation_frequency": 5,
-    "batch_size": 32,
+    "batch_size": 8,
     "save_frequency": 10,
+    "loss": "cross_entropy2d",
     "learning_rate": 3e-04,
     "scheduler_patience": 5,
     "scheduler_factor": 0.1

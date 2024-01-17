@@ -65,11 +65,44 @@ def clear_logs(experiment_name, run_name):
     """ Clear the local log files of a run. """
     path = os.path.join(os.getcwd(), 'experiments', experiment_name, run_name, 'logs')
     if not os.path.exists(path):
-        print_('Logs directory does not exist')
+        print_('Log directory does not exist')
         return -1
     shutil.rmtree(path)
     os.makedirs(path)
-    print_(f'Logs directory removed at: {path}')
+    print_(f'Log directory removed at: {path}')
+    return 1
+
+def clear_checkpoints(experiment_name, run_name):
+    """ Clear the local log files of a run. """
+    path = os.path.join(os.getcwd(), 'experiments', experiment_name, run_name, 'checkpoints')
+    if not os.path.exists(path):
+        print_('Checkpoint directory does not exist')
+        return -1
+    shutil.rmtree(path)
+    os.makedirs(path)
+    print_(f'Checkpoint directory removed at: {path}')
+    return 1
+
+def clear_plots(experiment_name, run_name):
+    """ Clear the local log files of a run. """
+    path = os.path.join(os.getcwd(), 'experiments', experiment_name, run_name, 'plots')
+    if not os.path.exists(path):
+        print_('Plot directory does not exist')
+        return -1
+    shutil.rmtree(path)
+    os.makedirs(path)
+    print_(f'Plot directory removed at: {path}')
+    return 1
+
+def clear_visualizations(experiment_name, run_name):
+    """ Clear the local log files of a run. """
+    path = os.path.join(os.getcwd(), 'experiments', experiment_name, run_name, 'visualizations')
+    if not os.path.exists(path):
+        print_('Visualization directory does not exist')
+        return -1
+    shutil.rmtree(path)
+    os.makedirs(path)
+    print_(f'Visualization directory removed at: {path}')
     return 1
 
 def get_env_setup():

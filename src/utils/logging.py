@@ -23,42 +23,6 @@ from pathlib import Path as P
 import csv
 import wandb
 import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
-
-#####===== Parameters =====#####
-color_mapping = {
-    0: (255, 0, 0),       # Red
-    1: (0, 255, 0),       # Green
-    2: (0, 0, 255),       # Blue
-    3: (255, 255, 0),     # Yellow
-    4: (255, 0, 255),     # Magenta
-    5: (0, 255, 255),     # Cyan
-    6: (255, 165, 0),     # Orange
-    7: (128, 0, 128),     # Purple
-    8: (0, 128, 0),       # Dark Green
-    9: (128, 0, 0),       # Maroon
-    10: (0, 128, 128),    # Teal
-    11: (128, 128, 0),    # Olive
-    12: (184, 134, 11),   # Dark Goldenrod
-    13: (138, 43, 226),   # Blue Violet
-    14: (165, 42, 42),    # Brown
-    15: (95, 158, 160),   # Cadet Blue
-    16: (255, 105, 180),  # Hot Pink
-    17: (50, 205, 50),    # Lime Green
-    18: (153, 50, 204),   # Dark Orchid
-    19: (0, 206, 209),    # Dark Turquoise
-    20: (220, 20, 60),    # Crimson
-    21: (70, 130, 180),   # Steel Blue
-    22: (46, 139, 87),    # Sea Green
-    23: (255, 69, 0),     # Red-Orange
-    24: (0, 100, 0),      # Dark Green
-    25: (128, 128, 0),    # Olive
-    26: (128, 0, 128),    # Purple
-    27: (0, 139, 139),    # Dark Cyan
-    28: (210, 105, 30),   # Chocolate
-    29: (255, 165, 79)    # Peach
-}
-
 
 #####===== Logging Decorators =====#####
 
@@ -247,67 +211,6 @@ def save_checkpoint(epoch, model=None, optimizer=None, scheduler=None, save_path
     print_(f'Checkpoint was saved to: {savepath}')
 
     return True
-#####===== Visualization Functions =====#####
-def visualize_segmentation(
-                image: Union[torch.Tensor, np.array],
-                   segmentation: Optional[Union[torch.Tensor, np.array]],
-                    ground_truth_segmentation: Optional[Union[torch.Tensor, np.array]]=None,
-                     class_labels: Optional[list] = None):
-
-    def _add_img(img, ax):
-        ax.imshow(img)
-        ax.axis('off')
-    def _map_segmentation(img):
-
-        segImg = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint)
-        for id in range(classes):
-            mask = (img == id)
-            segImg[mask.squeeze()] = color_mapping[id]
-        return segImg
-
-    inclGT = False
-    cols = 2
-    rows = image.shape[0]
-    classes = np.max(segmentation) if class_labels is None else len(class_labels)
-
-    if ground_truth_segmentation is not None:
-        assert image.shape[0] == ground_truth_segmentation.shape[0], "Must provide the same number of images and ground truth segmentations"
-        inclGT = True
-        cols = 3
-
-    fig = plt.figure()
-
-    ind = 1
-    for i in range(image.shape[0]):
-        img = image[i]
-        ax = fig.add_subplot(rows, cols, ind)
-        _add_img(img, ax)
-        ind += 1
-        if i == 0:
-            ax.set_title(f"Original Image")
-
-        seg = segmentation[i]
-        seg = _map_segmentation(seg)
-        ax = fig.add_subplot(rows, cols, ind)
-        _add_img(seg, ax)
-        ind += 1
-        if i == 0:
-            ax.set_title(f"Segmentation")
-
-        if inclGT:
-            gt_seg = ground_truth_segmentation[i]
-            gt_seg = _map_segmentation(gt_seg)
-            ax = fig.add_subplot(rows, cols, ind)
-            _add_img(gt_seg, ax)
-            ind += 1
-            if i == 0:
-                ax.set_title(f"Ground Truth")
-
-    if class_labels is not None:
-        legend_patches = [Patch(color=(rgb_values[0]/255,rgb_values[1]/255,rgb_values[2]/255,1.0), label=f'Index {index}') for index, rgb_values in list(color_mapping.items())[:classes]]
-        fig.legend(handles=legend_patches, bbox_to_anchor=(0.5, -0.15), loc='upper center', borderaxespad=0., ncol=5)
-    plt.tight_layout()
-    return fig
 
 #####===== Logger Modules =====#####
 
@@ -356,7 +259,8 @@ class Logger(object):
         if self.wandb_writer is not None:
             self.wandb_writer.log(data, step)
         if self.tb_writer is not None:
-            self.tb_writer.log(data, step)
+            for k, v in data.items():
+                self.tb_writer.add_scalar(k, v, step)
         if self.internal_writer is not None:
             self.internal_writer.log(data, step)
 
@@ -405,42 +309,6 @@ class Logger(object):
             values = values.cpu().numpy()
         if self.wandb_writer is not None:
             self.wandb_writer.log_histogram(name, values)
-
-    def log_segmentation_image(self,
-                  image: Union[torch.Tensor, np.array],
-                   segmentation: Optional[Union[torch.Tensor, np.array]],
-                    ground_truth_segmentation: Optional[Union[torch.Tensor, np.array]]=None,
-                     class_labels: Optional[list] = None,
-                      name: Optional[str] = None,
-                       step: Optional[int]=None) -> None:
-        """ 
-            Save segmentation images.
-            Images are assumed to be given with a batch dimension.
-            Images should be provided in a (height,width,channels) format.
-
-            Arguments:
-            ----------
-            @param image: the original image
-            @param segmentation: the predicted segmentation
-            @param ground_truth_segmentation: the ground truth segmentation
-            @param class_labels: the class labels
-            @param step: the current step
-        """
-        assert image.shape[0] == segmentation.shape[0], "Must provide the same number of images and segmentations"
-
-        ##-- Local Visualization --##
-        fig = visualize_segmentation(image, segmentation, ground_truth_segmentation, class_labels)
-        if name is not None:
-            fileName = name +'.png'
-        elif step is not None:
-            fileName = f'segmentation_{step}.png'
-        else:
-            fileName = f'segmentation.png'
-        savePath = str(P(self.vis_path) / fileName)
-        fig.savefig(savePath)
-
-        if self.wandb_writer is not None:
-            self.wandb_writer.log_segmentation_image(name, image, segmentation, ground_truth_segmentation, class_labels, step)
 
     def save_checkpoint(self,  epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer=None, scheduler=None):
 
@@ -539,11 +407,13 @@ class CSVWriter(object):
             except Exception as e:
                 print_(f"ERROR: CSV Writer, unable to update file: \n{e}")
                 return False
+            data_to_write += [None] * (len(self.tracked_metrics) - len(data_to_write)) 
+            
             for name in col_to_update:
                 data_to_write[self.tracked_metrics[name]] = data[name]
         try:
-            with open(self.file_name, 'w') as csvfile:
-                writer = csv.Writer(csvfile)
+            with open(self.file_name, 'a') as csvfile:
+                writer = csv.writer(csvfile)
                 writer.writerow(data_to_write)
         except Exception as e:
             print_(f"ERROR: CSV Writer, unable to write to file: {e}")
@@ -558,7 +428,7 @@ class CSVWriter(object):
             header = data[0]
 
         for i, name in enumerate(new_columns):
-            self.tracked_metrics[name] = len(header)+i+1
+            self.tracked_metrics[name] = len(header)+i
         header += new_columns
         data[0] = header
 
@@ -810,7 +680,7 @@ class MetricTracker(object):
             self.metrics[name] = AverageMeter(i)
         self.metrics[name].update(val)
 
-    def get_average(self, name:str=None) -> Union[float,Dict[str,float], List[float]]:
+    def get_average(self, name:str=None) -> Union[Dict[str, List[float]], List[float]]:
         if name is None:
             ret_dict = {}
             for name, meter in self.metrics.items():
@@ -818,7 +688,7 @@ class MetricTracker(object):
             return ret_dict
         return self.metrics[name].avg
     
-    def get_sum(self, name:str=None) -> Union[float,Dict[str,float],List[float]]:
+    def get_sum(self, name:str=None) -> Union[Dict[str,List[float]],List[float]]:
         if name is None:
             ret_dict = {}
             for name, meter in self.metrics.items():
