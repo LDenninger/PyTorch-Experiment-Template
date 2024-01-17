@@ -19,6 +19,8 @@ import json
 
 from .logging import print_
 
+from typing import Dict, List, Tuple, Optional
+
 ###--- Experiment Management Scripts ---###
 # These functions handle all interaction from outside with the experiments
 # We can simply initialize experiments, load and save configs, and load model checkpoints
@@ -63,26 +65,70 @@ def clear_logs(experiment_name, run_name):
     """ Clear the local log files of a run. """
     path = os.path.join(os.getcwd(), 'experiments', experiment_name, run_name, 'logs')
     if not os.path.exists(path):
-        print_('Logs directory does not exist')
+        print_('Log directory does not exist')
         return -1
     shutil.rmtree(path)
     os.makedirs(path)
-    print_(f'Logs directory removed at: {path}')
+    print_(f'Log directory removed at: {path}')
     return 1
 
-def resolve_experiment(experiment_name: str = None, run_name: str = None):
-    """ Resolve the experiment and run name with environment variables."""
-    if experiment_name is None:
-        if 'CURRENT_EXP' is os.environ.keys():
-            experiment_name = os.environ['CURRENT_EXP']
-        else:
-            print_('No experiment name specified')
+def clear_checkpoints(experiment_name, run_name):
+    """ Clear the local log files of a run. """
+    path = os.path.join(os.getcwd(), 'experiments', experiment_name, run_name, 'checkpoints')
+    if not os.path.exists(path):
+        print_('Checkpoint directory does not exist')
+        return -1
+    shutil.rmtree(path)
+    os.makedirs(path)
+    print_(f'Checkpoint directory removed at: {path}')
+    return 1
+
+def clear_plots(experiment_name, run_name):
+    """ Clear the local log files of a run. """
+    path = os.path.join(os.getcwd(), 'experiments', experiment_name, run_name, 'plots')
+    if not os.path.exists(path):
+        print_('Plot directory does not exist')
+        return -1
+    shutil.rmtree(path)
+    os.makedirs(path)
+    print_(f'Plot directory removed at: {path}')
+    return 1
+
+def clear_visualizations(experiment_name, run_name):
+    """ Clear the local log files of a run. """
+    path = os.path.join(os.getcwd(), 'experiments', experiment_name, run_name, 'visualizations')
+    if not os.path.exists(path):
+        print_('Visualization directory does not exist')
+        return -1
+    shutil.rmtree(path)
+    os.makedirs(path)
+    print_(f'Visualization directory removed at: {path}')
+    return 1
+
+def get_env_setup():
+    """ Get experiment and run name from environment."""
+    exp_name = None
+    run_name = None
+    if 'CURRENT_EXP' in os.environ:
+        exp_name = os.environ['CURRENT_EXP']
+    if 'CURRENT_RUN' in os.environ:
+        run_name = os.environ['CURRENT_RUN']
+    return exp_name, run_name
+    
+def resolve_experiment(exp_name: Optional[str]=None, run_name: Optional[str]=None):
+    """ 
+        Resolve provided and environment experiment and run names.
+        Provided experiment and run names always override environment experiment and run names.
+    """
+
+    env_exp_name, env_run_name = get_env_setup()
+    if exp_name is None:
+        exp_name = env_exp_name
     if run_name is None:
-        if 'CURRENT_RUN' is os.environ.keys():
-            run_name = os.environ['CURRENT_RUN']
-        else:
-            print_('No run name specified')
-    return experiment_name, run_name
+        run_name = env_run_name
+    if exp_name is None or run_name is None:
+        print_('Experiment or run name is not set', 'warn')
+    return exp_name, run_name
 
 ###--- Configurations ---###
 
@@ -136,7 +182,7 @@ def load_model_from_checkpoint(exp_name,
         return
     print_(f'Model checkpoint was load from: {cp_dir}')
 
-def load_model_from_path(path: str, model: torch.nn.Model, optimizer=None, scheduler=None, device: str = 'cpu'):
+def load_model_from_path(path: str, model: torch.nn.Module, optimizer=None, scheduler=None, device: str = 'cpu'):
     try:
         data = torch.load(path, map_location=torch.device(device))
         model.load_state_dict(data['model_state_dict'])

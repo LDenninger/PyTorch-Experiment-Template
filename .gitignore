@@ -1,8 +1,11 @@
 __pycache__/
+__pycache__
+__pycache__/*
 
 data/*
 !data/.gitkeep
-
+wandb/*
+experiments/*
 .vscode
 
 #experiments/*

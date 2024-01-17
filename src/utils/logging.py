@@ -12,6 +12,7 @@ import numpy as np
 import json
 import torch
 import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
 import torchvision
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union, Literal
 import traceback
@@ -20,7 +21,8 @@ import os
 import git
 from pathlib import Path as P
 import csv
-
+import wandb
+import matplotlib.pyplot as plt
 
 #####===== Logging Decorators =====#####
 
@@ -210,7 +212,6 @@ def save_checkpoint(epoch, model=None, optimizer=None, scheduler=None, save_path
 
     return True
 
-
 #####===== Logger Modules =====#####
 
 class Logger(object):
@@ -219,7 +220,7 @@ class Logger(object):
         self.exp_name = exp_name
         self.run_name = run_name
         self.exp_path = exp_path
-        self.base_path = P('experiments') if P(exp_path) is None else exp_path
+        self.base_path = P('experiments') if exp_path is None else P(exp_path)
 
         ##-- Logging Paths --##
         if self.exp_name is not None and self.run_name is not None:
@@ -251,19 +252,19 @@ class Logger(object):
         global LOGGER
         LOGGER = self
     
+    ##-- Logging Functions --##
     def log(self, data: Dict[str, Any], step: Optional[int]=None) -> bool:
         if self.csv_writer is not None:
             self.csv_writer.log(data, step)
         if self.wandb_writer is not None:
             self.wandb_writer.log(data, step)
         if self.tb_writer is not None:
-            self.tb_writer.log(data, step)
+            for k, v in data.items():
+                self.tb_writer.add_scalar(k, v, step)
         if self.internal_writer is not None:
             self.internal_writer.log(data, step)
 
     def log_info(self, message: str, message_type: str='info') -> None:
-        if not self.run_initialized:
-            return
         cur_time = self._get_datetime()
         msg_str = f'{cur_time}   [{message_type}]: {message}\n'
         with open(self.log_file_path, 'a') as f:
@@ -284,10 +285,23 @@ class Logger(object):
         if self.wandb_writer is not None:
             self.wandb_writer.log_config(config)
 
+    def log_architecture(self, model: torch.nn.Module) -> None:
+        """ Log the model architecture. """
+        savePath = str(P(self.log_path) / "architecture.txt")
+        log_architecture(model, savePath)
+    
+    def log_git_hash(self) -> None:
+        gitHash = get_current_git_hash()
+        with open(self.log_path / 'git_hash.txt', 'w') as f:
+            f.write(gitHash)
+
     def log_image(self, name: str, image: Union[torch.tensor, np.array], step: Optional[int] = None) -> None:
+
+        savePath = str(P(self.vis_path) / (name+'.png'))
+        plt.imsave(savePath, image)
         if self.wandb_writer is not None:
             self.wandb_writer.log_image(name, image, step)
-        if self.tb_writer is not None:
+        if self.tb_writer is not None and False:
             self.tb_writer.log_image(name, image, step)
 
     def log_histograms(self, name: str, values: Union[np.array, torch.tensor]):
@@ -295,6 +309,19 @@ class Logger(object):
             values = values.cpu().numpy()
         if self.wandb_writer is not None:
             self.wandb_writer.log_histogram(name, values)
+
+    def save_checkpoint(self,  epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer=None, scheduler=None):
+
+        save_checkpoint(
+            epoch=epoch,
+            model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            save_path=self.checkpoint_path
+        )
+
+
+    ##-- Initialization Functions --##
 
     def initialize_csv(self, file_name: str = None):
         file_name = P(self.log_path) / file_name if file_name is not None else P(self.log_path) / "metrics.csv"
@@ -308,7 +335,7 @@ class Logger(object):
         self.wandb_writer = WandBWriter(name, project_name, **kwargs)
 
     def initialize_tensorboard(self, **kwargs):
-        raise NotImplementedError('Tensorboard is not implemented yet')
+        self.tb_writer = TensorboardWriter(self.log_path, **kwargs)
     
     def initialize_internal(self, **kwargs):
         self.internal_writer = MetricTracker(**kwargs)
@@ -380,11 +407,13 @@ class CSVWriter(object):
             except Exception as e:
                 print_(f"ERROR: CSV Writer, unable to update file: \n{e}")
                 return False
+            data_to_write += [None] * (len(self.tracked_metrics) - len(data_to_write)) 
+            
             for name in col_to_update:
                 data_to_write[self.tracked_metrics[name]] = data[name]
         try:
-            with open(self.file_name, 'w') as csvfile:
-                writer = csv.Writer(csvfile)
+            with open(self.file_name, 'a') as csvfile:
+                writer = csv.writer(csvfile)
                 writer.writerow(data_to_write)
         except Exception as e:
             print_(f"ERROR: CSV Writer, unable to write to file: {e}")
@@ -399,7 +428,7 @@ class CSVWriter(object):
             header = data[0]
 
         for i, name in enumerate(new_columns):
-            self.tracked_metrics[name] = len(header)+i+1
+            self.tracked_metrics[name] = len(header)+i
         header += new_columns
         data[0] = header
 
@@ -466,19 +495,68 @@ class MetricTracker:
         else:
             self.metrics = {}
 
-class TensorBoardWriter(object):
+class TensorboardWriter:
     """
-        TODO: Finish this writer
+    Class for handling the tensorboard logger
+
+    Args:
+    -----
+    logdir: string
+        path where the tensorboard logs will be stored
     """
 
-    def __init__(self, file_path: str):
-        self.file_path = file_path
+    def __init__(self, logdir):
+        """ Initializing tensorboard writer """
+        self.logdir = logdir
+        self.writer = SummaryWriter(logdir)
+        return
+
+    def add_scalar(self, name, val, step):
+        """ Adding a scalar for plot """
+        self.writer.add_scalar(name, val, step)
+        return
+
+    def add_scalars(self, plot_name, val_names, vals, step):
+        """ Adding several values in one plot """
+        val_dict = {val_name: val for (val_name, val) in zip(val_names, vals)}
+        self.writer.add_scalars(plot_name, val_dict, step)
+        return
+
+    def add_image(self, fig_name, img_grid, step):
+        """ Adding a new step image to a figure """
+        self.writer.add_image(fig_name, img_grid, global_step=step)
+        return
+
+    def add_figure(self, tag, figure, step):
+        """ Adding a whole new figure to the tensorboard """
+        self.writer.add_figure(tag=tag, figure=figure, global_step=step)
+        return
+
+    def add_graph(self, model, input):
+        """ Logging model graph to tensorboard """
+        self.writer.add_graph(model, input_to_model=input)
+        return
+
+    def log_full_dictionary(self, dict, step, plot_name="Losses", dir=None):
+        """
+        Logging a bunch of losses into the Tensorboard. Logging each of them into
+        its independent plot and into a joined plot
+        """
+        if dir is not None:
+            dict = {f"{dir}/{key}": val for key, val in dict.items()}
+        else:
+            dict = {key: val for key, val in dict.items()}
+
+        for key, val in dict.items():
+            self.add_scalar(name=key, val=val, step=step)
+
+        plot_name = f"{dir}/{plot_name}" if dir is not None else key
+        self.add_scalars(plot_name=plot_name, val_names=dict.keys(), vals=dict.values(), step=step)
         return
 
 class WandBWriter(object):
 
     def __init__(self, run_name: str, project_name: str, **kwargs):
-        import wandb
         wandb.login()
         self.run = wandb.init(project=project_name, name=run_name, **kwargs)
 
@@ -585,6 +663,40 @@ class WandBWriter(object):
                             "mask_data": segmentation,
                         }})              
         wandb.log({name: wandbImage}, step=step)
+
+class MetricTracker(object):
+    """ Manages and stores different metrics """
+
+    def __init__(self):
+        self.metrics = None
+        self.reset()
+
+    def reset(self):
+        self.metrics = {}
+
+    def update(self, name:str, val:Union[float,int, List[Union[float,int]]])->None:
+        if name not in self.metrics:
+            i = 1 if type(val)!=list else len(val)
+            self.metrics[name] = AverageMeter(i)
+        self.metrics[name].update(val)
+
+    def get_average(self, name:str=None) -> Union[Dict[str, List[float]], List[float]]:
+        if name is None:
+            ret_dict = {}
+            for name, meter in self.metrics.items():
+                ret_dict[name] = meter.avg
+            return ret_dict
+        return self.metrics[name].avg
+    
+    def get_sum(self, name:str=None) -> Union[Dict[str,List[float]],List[float]]:
+        if name is None:
+            ret_dict = {}
+            for name, meter in self.metrics.items():
+                ret_dict[name] = meter.sum
+            return ret_dict
+        return self.metrics[name].sum
+
+
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
