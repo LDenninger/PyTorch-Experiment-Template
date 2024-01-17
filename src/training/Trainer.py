@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.datasets as datasets
+from torchvision.transforms import v2
+import torchvision.transforms as transforms
+
 from torch.utils.data import DataLoader
 import numpy as np
 from tqdm import tqdm
@@ -37,15 +40,24 @@ class Trainer(object):
     ##-- Initialization Functions --##
     def initialize_data(self, train:bool=True, eval:bool=True):
         """ Load the training and evaluation datasets. """
-
+        input_transforms = v2.Compose(
+            [   
+                v2.ToTensor(),
+                v2.ToDtype(torch.float32, scale=True),
+                transforms.Resize((128, 256), antialias=True),
+                v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), 
+            ]
+        )
+        target_transform = v2.Compose([v2.ToTensor(),transforms.Resize((128, 256), antialias=True)])
         ##-- Train Dataset --##
         if train:
             train_dataset = datasets.Cityscapes(
-                root='./data/cityscapes',
+                root='./data',
                 split='train',
                 mode='fine',
                 target_type='semantic',
-                transform=None
+                transform=input_transforms,
+                target_transform=target_transform
             )
             self.train_loader = DataLoader(
                 dataset=train_dataset,
@@ -58,10 +70,11 @@ class Trainer(object):
         ##-- Evaluation Dataset --##
         if eval:
             eval_dataset = datasets.Cityscapes(
-                root='./data/cityscapes',
+                root='./data',
                 split='val',
                 mode='coarse',
-                transform=None
+                transform=input_transforms,
+                target_transform=target_transform
             )
             self.eval_loader = DataLoader(
                 dataset=eval_dataset,
@@ -72,6 +85,7 @@ class Trainer(object):
             )
     def initialize_model(self, checkpoint_path:str=None):
         self.model = UNet(n_channels=3, n_classes=30)
+        self.model = self.model.to(self.device)
         if checkpoint_path:
             load_model_from_path(checkpoint_path, self.model, device=self.device)
         self.logger.log_architecture(self.model)
@@ -185,7 +199,6 @@ class Trainer(object):
             target = target.to(self.device)
             pred = self.model(img)
             # Compute the evaluation metrics
-            target = F.one_hot(target, num_classes=30)
             self.evaluation_metrics(pred, target)
 
             # Visualize some demonstration images for the first batch of images
@@ -226,18 +239,20 @@ class Trainer(object):
         class_prec = []
         class_recall = []
         class_iou = []
+
+        flat_seg = torch.flatten(segmentation.permute(0,2,3,1), start_dim=0, end_dim=2)
+        flat_target = torch.flatten(target.permute(0,2,3,1), start_dim=0, end_dim=2)
+        flat_target = F.one_hot(flat_target.squeeze().to(dtype=torch.int64), num_classes=30)
         # Compute per class metrices
         for id in range(30):
-            class_pred = segmentation[:,id]
-            class_gt = target[:,id]
+            class_pred = flat_seg[:,id]
+            class_gt = flat_target[:,id]
 
-            seg_flat = torch.flatten(class_pred)
-            target_flat = torch.flatten(class_gt)
             # Compute the confusion matrix per class
-            tp = torch.sum(target_flat * seg_flat)
-            fp = torch.sum(seg_flat) - tp
-            fn = torch.sum(target_flat) - tp
-            tn = seg_flat.numel() - tp - fp - fn
+            tp = torch.sum(class_gt * class_pred)
+            fp = torch.sum(class_pred) - tp
+            fn = torch.sum(class_gt) - tp
+            tn = class_pred.numel() - tp - fp - fn
             # Compute the quantitative metrics
             acc = (tn + tp) / (tn + tp + fp + fn)
             prec = tp / (tp + fp)
