@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torchvision.datasets as datasets
 from torchvision.transforms import v2
 import torchvision.transforms as transforms
+import time
 
 from torch.utils.data import DataLoader
 import numpy as np
@@ -13,6 +14,7 @@ from models import UNet, R2UNet
 from utils.management import load_config_from_run, load_model_from_path
 from utils.logging import print_, Logger, MetricTracker, LOGGER
 from utils.losses import cross_entropy2d
+from visualization import visualize_segmentation
 from data import CityScapesLoader
 
 class Trainer(object):
@@ -54,7 +56,7 @@ class Trainer(object):
         ##-- Train Dataset --##
         if train:
             if self.config['dataset'].lower() == 'cityscapes':
-                train_dataset = datasets.Cityscapes(
+                self.train_dataset = datasets.Cityscapes(
                     root='./data/CityScapes',
                     split='train',
                     mode='fine',
@@ -63,7 +65,7 @@ class Trainer(object):
                     target_transform=target_transform
                 )
             elif self.config['dataset'].lower() == 'cityscapes_custom':
-                train_dataset = CityScapesLoader(
+                self.train_dataset = CityScapesLoader(
                     root='./data/CityScapes',
                     split='train'
                 )
@@ -71,17 +73,17 @@ class Trainer(object):
                 raise ValueError(f"Dataset {self.config['dataset']} not recognized.")
             
             self.train_loader = DataLoader(
-                dataset=train_dataset,
+                dataset=self.train_dataset,
                 batch_size = self.config['batch_size'],
                 shuffle=True,
-                num_workers=4,
+                num_workers=8,
                 drop_last=True                               
             )
 
         ##-- Evaluation Dataset --##
         if eval:
             if self.config['dataset'].lower() == 'cityscapes':
-                eval_dataset = datasets.Cityscapes(
+                self.eval_dataset = datasets.Cityscapes(
                     root='./data/CityScapes',
                     split='val',
                     mode='coarse',
@@ -89,7 +91,7 @@ class Trainer(object):
                     target_transform=target_transform
                 )
             elif self.config['dataset'].lower() == 'cityscapes_custom':
-                eval_dataset = CityScapesLoader(
+                self.eval_dataset = CityScapesLoader(
                     root='./data/CityScapes',
                     split='val'
                 )
@@ -97,10 +99,10 @@ class Trainer(object):
                 raise ValueError(f"Dataset {self.config['dataset']} not recognized.")
             
             self.eval_loader = DataLoader(
-                dataset=eval_dataset,
+                dataset=self.eval_dataset,
                 batch_size = self.config['batch_size'],
                 shuffle=True,
-                num_workers=4,
+                num_workers=8,
                 drop_last=True
             )
 
@@ -159,7 +161,7 @@ class Trainer(object):
         max_epochs = self.config['num_epochs']
 
         for epoch in range(max_epochs):
-            print_(f'Epoch: {epoch+1}/{max_epochs}')
+            print_(f'\nEpoch: {epoch+1}/{max_epochs}')
             # Evaluate the model in regular intervals
             if epoch==0 or (epoch+1) % self.config['evaluation_frequency'] == 0:
                 self.eval_epoch()
@@ -179,12 +181,13 @@ class Trainer(object):
         running_loss = 0.0
 
         length = len(self.train_loader)
-        progress_bar = tqdm(enumerate(self.train_loader), total=length)
 
         # Initialize the training
         self.model.train()
         self.metrics.reset()
-        print_('\nTraining:')
+        print_('Training:')
+
+        progress_bar = tqdm(enumerate(self.train_loader), total=length)
         for i, (img, target) in progress_bar:
             if i == length:
                 break
@@ -197,7 +200,7 @@ class Trainer(object):
                 target = target.permute(0,3,1,2).to(dtype=torch.float32)
             # Move the image and target to the device
             img = img.to(self.device)
-            target = target.to(self.device)
+            target = target.squeeze().int().to(self.device, dtype=torch.int64)
 
             # Compute the model output
             pred = self.model(img)
@@ -222,7 +225,7 @@ class Trainer(object):
     @torch.no_grad()      
     def eval_epoch(self):
 
-        print_('\nEvaluation:')
+        print_('Evaluation:')
         
         length = len(self.eval_loader)
         progress_bar = tqdm(enumerate(self.eval_loader), total=length)
@@ -236,6 +239,13 @@ class Trainer(object):
             img = img.to(self.device)
             target = target.to(self.device)
             pred = self.model(img)
+            # Visualize some demo segmentations
+            if i == 0:
+                segmentation = torch.argmax(pred, dim=1).unsqueeze(-1).cpu().numpy()
+                org_image = img.permute(0,2,3,1).cpu().numpy()
+                target_image = target.permute(0,2,3,1).cpu().numpy()
+                eval_img = visualize_segmentation(org_image, segmentation, target_image, self.train_loader.dataset.class_names)
+                self.logger.log_image(f"segmentation_step_{self.step}.png", eval_img[...,:3], step=self.step)
             # Compute the evaluation metrics
             self.evaluation_metrics(pred, target)
 
@@ -286,7 +296,7 @@ class Trainer(object):
         flat_target = torch.where(flat_target>self.config['num_classes']-1, 0, flat_target)
         flat_target = F.one_hot(flat_target.to(dtype=torch.int64), num_classes=self.config['num_classes'])
         # Compute per class metrices
-        for id in range(1,self.config['num_classes']):
+        for id in range(self.config['num_classes']):
             class_pred = flat_seg[:,id]
             class_gt = flat_target[:,id]
 

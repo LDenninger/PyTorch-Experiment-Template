@@ -77,7 +77,6 @@ class CityScapesLoader(data.Dataset):
         
         # these are 19 + 1; "unlabelled" is extra
         self.class_names = [
-            "unlabelled",
             "road",
             "sidewalk",
             "building",
@@ -97,10 +96,11 @@ class CityScapesLoader(data.Dataset):
             "train",
             "motorcycle",
             "bicycle",
+            "unlabelled"
         ]
         
         # for void_classes; useful for loss function
-        self.ignore_index = 250
+        self.ignore_index = 20
         
         # dictionary of valid classes 7:0, 8:1, 11:2
         self.class_map = dict(zip(self.valid_classes, range(19)))

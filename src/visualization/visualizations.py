@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from typing import List, Dict, Any, Optional, Union
 from matplotlib.patches import Patch
 
+from .helper_functions import pyplot_to_numpy
 ##-- Global Parameters --##
 
 color_mapping = {
@@ -57,46 +58,52 @@ def visualize_segmentation(
             segImg[mask.squeeze()] = color_mapping[id]
         return segImg
 
+    ##-- Parameters --##
     inclGT = False
     cols = 2
     rows = image.shape[0]
+    col_scale = 5
+    row_scale = 5
     classes = np.max(segmentation) if class_labels is None else len(class_labels)
+
 
     if ground_truth_segmentation is not None:
         assert image.shape[0] == ground_truth_segmentation.shape[0], "Must provide the same number of images and ground truth segmentations"
         inclGT = True
         cols = 3
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(cols*col_scale, rows*row_scale))
 
     ind = 1
     for i in range(image.shape[0]):
-        img = image[i]
+        img = np.clip(image[i] / 255.0, 0, 1)
         ax = fig.add_subplot(rows, cols, ind)
         _add_img(img, ax)
         ind += 1
         if i == 0:
-            ax.set_title(f"Original Image")
+            ax.set_title(f"Original Image", fontsize=20)
 
         seg = segmentation[i]
         seg = _map_segmentation(seg)
+        seg = np.clip(seg / 255.0, 0, 1)
         ax = fig.add_subplot(rows, cols, ind)
         _add_img(seg, ax)
         ind += 1
         if i == 0:
-            ax.set_title(f"Segmentation")
+            ax.set_title(f"Segmentation", fontsize=20)
 
         if inclGT:
             gt_seg = ground_truth_segmentation[i]
             gt_seg = _map_segmentation(gt_seg)
+            gt_seg = np.clip(gt_seg / 255.0, 0, 1)
             ax = fig.add_subplot(rows, cols, ind)
             _add_img(gt_seg, ax)
             ind += 1
             if i == 0:
-                ax.set_title(f"Ground Truth")
+                ax.set_title(f"Ground Truth", fontsize=20)
 
     if class_labels is not None:
-        legend_patches = [Patch(color=(rgb_values[0]/255,rgb_values[1]/255,rgb_values[2]/255,1.0), label=f'Index {index}') for index, rgb_values in list(color_mapping.items())[:classes]]
-        fig.legend(handles=legend_patches, bbox_to_anchor=(0.5, -0.15), loc='upper center', borderaxespad=0., ncol=5)
+        legend_patches = [Patch(color=(rgb_values[0]/255,rgb_values[1]/255,rgb_values[2]/255,1.0), label=class_labels[index]) for index, rgb_values in list(color_mapping.items())[:classes]]
+        fig.legend(handles=legend_patches, loc='lower center', borderaxespad=0., ncol=5,fontsize='xx-large')
     plt.tight_layout()
-    return fig
+    return pyplot_to_numpy(fig)
