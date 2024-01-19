@@ -1,3 +1,8 @@
+"""
+    Initialize and experiment and/or run directory.
+
+    Author: Luis Denninger <l_denninger@uni-bonn.de>
+"""
 import os
 import argparse
 from utils.management import resolve_experiment, create_experiment, create_run, load_config_to_run

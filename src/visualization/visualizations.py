@@ -1,3 +1,12 @@
+"""
+    Visualization functions for different tasks.
+
+    Author: Luis Denninger <l_denninger@uni-bonn.de>
+
+    TODO: There are still a lot of visualization functions missing from other projects of mine.
+
+"""
+
 import torch 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -45,7 +54,23 @@ def visualize_segmentation(
                 image: Union[torch.Tensor, np.array],
                    segmentation: Optional[Union[torch.Tensor, np.array]],
                     ground_truth_segmentation: Optional[Union[torch.Tensor, np.array]]=None,
-                     class_labels: Optional[list] = None):
+                     class_labels: Optional[list] = None) -> np.array:
+    """
+        Visualize multiple segmentation images.
+
+        The image format is assumed to be: [batch,channel,height,width]
+        Segmentation images are assumed to save the segmentation index and not be one hot encoded.
+
+        Arguments:
+        -----------
+        @param image: Original image.
+        @param segmentation: Segmentation image.
+        @param ground_truth_segmentation: Ground truth segmentation image.
+        @param class_labels: List of class labels.
+
+        @return: Comparison of multiple segmentation images
+    
+    """
 
     def _add_img(img, ax):
         ax.imshow(img)
@@ -66,6 +91,12 @@ def visualize_segmentation(
     row_scale = 5
     classes = np.max(segmentation) if class_labels is None else len(class_labels)
 
+    if torch.is_tensor(image):
+        image = image.cpu().numpy()
+    if torch.is_tensor(segmentation):
+        segmentation = segmentation.cpu().numpy()
+    if torch.is_tensor(ground_truth_segmentation):
+        ground_truth_segmentation = ground_truth_segmentation.cpu().numpy()
 
     if ground_truth_segmentation is not None:
         assert image.shape[0] == ground_truth_segmentation.shape[0], "Must provide the same number of images and ground truth segmentations"

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-def cross_entropy2d(input, target, weight=None):
+def cross_entropy2d(input, target, weight=None, ignore_index=20):
     n, c, h, w = input.size()
     nt, ht, wt = target.size()
 
@@ -13,6 +13,6 @@ def cross_entropy2d(input, target, weight=None):
     input = input.permute(0,2,3,1).contiguous().view(-1, c)
     target = target.view(-1)
     loss = F.cross_entropy(
-        input, target, weight=weight, reduction='mean', ignore_index=20
+        input, target, weight=weight, reduction='mean', ignore_index=ignore_index
     )
     return loss

@@ -1,6 +1,6 @@
 """
-    This module capsules the logging and complete communication with the WandB API.
-    It can be used for either logging or load previously logged data.
+    This module capsules the logging to WandB servers, Tensorboard, or simply the local experiment directory.
+    Ideally this should capsule the complete communication with the experiment directory etc.
 
     Some parts of the logging module were adapted from: https://github.com/angelvillar96/TemplaTorch
 
@@ -105,6 +105,7 @@ def print_(message, message_type="info", file_name: str=None, path_type: Literal
 
 
 def log_info(message, message_type="info"):
+    """ Log a message to the log files of the logger. """
     if(LOGGER is not None):
         LOGGER.log_info(message, message_type)
     return
@@ -215,7 +216,22 @@ def save_checkpoint(epoch, model=None, optimizer=None, scheduler=None, save_path
 #####===== Logger Modules =====#####
 
 class Logger(object):
+    """
+        Main logging module. This should be always instantiated when training or evaluating a model.
+        Through this module, you can then activate different writers to log the training or evaluation process.
+        Available writers are: WandB writer, Tensorboard writer or CSV writer.
+    
+    """
     def __init__(self, exp_name: Optional[str] = None, run_name: Optional[str] = None, exp_path: Optional[str] = None):
+        """
+            Initialize the logger. This also initializes a global logger that can be accessed throughou the project.
+
+            Arguments:
+            -----------
+            @param exp_name: Name of the experiment
+            @param run_name: Name of the run
+            @param exp_path: Path to the root directory of the experiments.
+        """
         assert (exp_name is not None and run_name is not None) or exp_path is not None, "ERROR: Please provide either an experiment and run name or an experiment path"
         self.exp_name = exp_name
         self.run_name = run_name
@@ -253,7 +269,15 @@ class Logger(object):
         LOGGER = self
     
     ##-- Logging Functions --##
-    def log(self, data: Dict[str, Any], step: Optional[int]=None) -> bool:
+    def log(self, data: Dict[str, Any], step: Optional[int]=None) -> None:
+        """
+            Log scalar metrics.
+
+            Arguments:
+            -----------
+            @param data: Dictionary mapping metric_name->metric_value to be logged.
+            @param step: Current training step.
+        """
         if self.csv_writer is not None:
             self.csv_writer.log(data, step)
         if self.wandb_writer is not None:
@@ -265,6 +289,14 @@ class Logger(object):
             self.internal_writer.log(data, step)
 
     def log_info(self, message: str, message_type: str='info') -> None:
+        """
+            Log information to the log file.
+
+            Arguments:
+            -----------
+            @param message: Message to be logged.
+            @param message_type: Type of the message that is displayed in the log file.
+        """
         cur_time = self._get_datetime()
         msg_str = f'{cur_time}   [{message_type}]: {message}\n'
         with open(self.log_file_path, 'a') as f:
@@ -273,6 +305,10 @@ class Logger(object):
     def log_config(self, config: Dict[str, Any]) -> None:
         """
             Log configuration to the log file.
+
+            Arguments:
+            -----------
+            @param config: Config dictionary mapping config_name->config_value to be logged.
         """
 
         cur_time = self._get_datetime()
@@ -286,17 +322,32 @@ class Logger(object):
             self.wandb_writer.log_config(config)
 
     def log_architecture(self, model: torch.nn.Module) -> None:
-        """ Log the model architecture. """
+        """ 
+            Log the model architecture. 
+
+            Arguments:
+            -----------
+            @param model:  PyTorch model to be logged.
+        """
         savePath = str(P(self.log_path) / "architecture.txt")
         log_architecture(model, savePath)
     
     def log_git_hash(self) -> None:
+        """ Log the git hash from the current commit. """
         gitHash = get_current_git_hash()
         with open(self.log_path / 'git_hash.txt', 'w') as f:
             f.write(gitHash)
 
     def log_image(self, name: str, image: Union[torch.tensor, np.array], step: Optional[int] = None) -> None:
+        """ 
+            Log an image to the experiment directory.
 
+            Arguments:
+            -----------
+            @param name: Name of the image that is used to save the file.
+            @param image: Image to be logged. The image should be of format [height,width,channel]
+            @param step: Current training step.
+        """
         savePath = str(P(self.vis_path) / (name+'.png'))
         plt.imsave(savePath, image)
         if self.wandb_writer is not None:
@@ -305,12 +356,34 @@ class Logger(object):
             self.tb_writer.log_image(name, image, step)
 
     def log_histograms(self, name: str, values: Union[np.array, torch.tensor]):
+        """
+            Log a histogram to the experiment directory.
+
+            Arguments:
+            -----------
+            @param name: Name of the histogram that is used to save the file.
+            @param values: Values to be logged.
+
+            TODO: This function was not properly tested yet and should be used with caution
+        """
         if torch.is_tensor(values):
             values = values.cpu().numpy()
         if self.wandb_writer is not None:
             self.wandb_writer.log_histogram(name, values)
 
     def save_checkpoint(self,  epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer=None, scheduler=None):
+        """
+            Save a model checkpoint during training. 
+            Optionally, one can also provide the optimization modules to resume training
+            from the given checkpoint.
+
+            Arguments:
+            -----------
+            @param epoch: Current training epoch.
+            @param model: PyTorch model to be saved.
+            @param optimizer: PyTorch optimizer to be saved.
+            @param scheduler: PyTorch scheduler to be saved.
+        """
 
         save_checkpoint(
             epoch=epoch,
@@ -322,12 +395,28 @@ class Logger(object):
 
 
     ##-- Initialization Functions --##
+    # This functions have to be called to activate the different writers.
 
     def initialize_csv(self, file_name: str = None):
+        """
+            Initialize the CSV writer. The file is saved to the log path of the run.
+
+            Arguments:
+            -----------
+            @param file_name: Name of the CSV file to be saved. 
+        """
         file_name = P(self.log_path) / file_name if file_name is not None else P(self.log_path) / "metrics.csv"
         self.csv_writer = CSVWriter(file_name)
     
     def initialize_wandb(self, project_name: str, **kwargs):
+        """
+            Initialize the WandB writer. This requires prior logging to your account through your API key.
+
+            Arguments:
+            -----------
+            @param project_name: Name of the project within the WandB environment.
+            @param kwargs: Additional arguments according to the WandB module: https://docs.wandb.ai/ref/python/init
+        """
         if self.exp_name is not None and self.run_name is not None:
             name = f"{self.exp_name}/{self.run_name}"
         else:
@@ -335,19 +424,28 @@ class Logger(object):
         self.wandb_writer = WandBWriter(name, project_name, **kwargs)
 
     def initialize_tensorboard(self, **kwargs):
+        """
+            Initialize the TensorBoard writer.
+
+            Arguments:
+            -----------
+            @param kwargs: Additional arguments according to the TensorBoard module.
+        """
         self.tb_writer = TensorboardWriter(self.log_path, **kwargs)
     
-    def initialize_internal(self, **kwargs):
-        self.internal_writer = MetricTracker(**kwargs)
     
     def get_path(self, name: Optional[Literal['log', 'plot', 'checkpoint', 'visualization']] = None) -> str:
         """
             Get the path to the specified directory.
 
             Arguments:
-                name Optional[Literal['log', 'plot', 'checkpoint', 'visualization']]: Type of the directory to retrieve.
-                    If None is provided, the run path is returned.
-
+            -----------
+            @param name: Type of the directory to retrieve the path from.
+                The run directory consists of the following specific directories: 
+                - log -> To save any logs
+                - plot -> To save any plots
+                - checkpoint -> To save model checkpoints
+                - visualization -> To save any visualizations
 
         """
         if not self.run_initialized:
@@ -365,6 +463,7 @@ class Logger(object):
             return self.vis_path
         
     def _get_datetime(self) -> str:
+        """ Internal function to get the current formatted time. """
         return datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
 
 class CSVWriter(object):
@@ -372,6 +471,14 @@ class CSVWriter(object):
         A small module to dynamically log metrics to a csv file.
     """
     def __init__(self, file_name: str, overwrite: Optional[bool] = True):
+        """
+            Initialize the CSW writer.
+
+            Arguments:
+            -----------
+            @param file_name: Name of the CSV file to be saved.
+            @param overwrite: Whether to overwrite the file if it already exists.
+        """
         if os.path.exists(file_name) and overwrite is False:
             i = 1
             file_name = P(file_name)
@@ -391,6 +498,15 @@ class CSVWriter(object):
             writer.writerow(self.tracked_metrics.keys())
 
     def log(self, data: Dict[str, Any], step: Optional[int]=None) -> None:
+        """
+            Log the given metrics.
+            The function automatically adds new columns for each metric.
+
+            Arguments:
+            -----------
+            @param data: Metrics to be logged. The dictionary is of format {metric_name: metric_value}.
+            @param step: Current training step.
+        """
 
         data_to_write = [step]+[None]*(len(self.tracked_metrics)-1)
         col_to_update = []
@@ -420,7 +536,14 @@ class CSVWriter(object):
             return False
         return True
 
-    def update_file(self, new_columns: List[str]):
+    def update_file(self, new_columns: List[str]) -> None:
+        """
+            Internal function to update the columns with newly tracked metrics.
+
+            Arguments:
+            -----------
+            @param new_columns: List of new columns (names of the metrics) to be added.
+        """
         with open(self.file_name, 'r') as csvfile:
             csv_reader = csv.reader(csvfile)
             # Read the existing content
@@ -436,83 +559,34 @@ class CSVWriter(object):
             csv_writer = csv.writer(csvfile)
             csv_writer.writerows(data)
 
-class MetricTracker:
-    """
-        A module to log metrics in RAM to easily access them and compute statistics.
-    """
-    def __init__(self):
-        self.metrics = {}
-
-    def log(self, data: Dict[str, Any]):
-        """ Log a metric value"""
-        for metric_name, metric_value in data.items():
-            if metric_name not in self.metrics.keys():
-                self.metrics[metric_name] = []
-            self.metrics[metric_name].append(metric_value)
-
-    def get_metric(self, metric_name: Optional[str] = None):
-        if metric_name is None:
-            return self.metrics
-        elif metric_name in self.metrics.keys():
-            return self.metrics[metric_name]
-        else:
-            print_('Tried to fetch non-existing from MetricTracker', 'warn')
-            return None
-
-    def get_mean(self, metric_name: str = None) -> float:
-        """ Get the mean value of a metric """
-        if metric_name is None:
-            return {key: np.mean(values) for key, values in self.metrics.items()}
-        if metric_name not in self.metrics.keys():
-            print_(f'MetricTracker received an invalid metric name for retrieval {metric_name}')
-            return 0
-        return np.mean(self.metrics[metric_name])
-
-    def get_variance(self, metric_name: str = None) -> float:
-        """ Get the variance value of a metric """
-        if metric_name is None:
-            return {key: np.var(values) for key, values in self.metrics.items()}
-        if metric_name not in self.metrics.keys():
-            print_(f'MetricTracker received an invalid metric name for retrieval {metric_name}')
-            return 0
-        return np.var(self.metrics[metric_name])
-    
-    def get_median(self, metric_name: str = None) -> float:
-        """ Get the median value of a metric """
-        if metric_name is None:
-            return {key: np.median(values) for key, values in self.metrics.items()}
-        if metric_name not in self.metrics.keys():
-            print_(f'MetricTracker received an invalid metric name for retrieval {metric_name}')
-            return 0
-        return np.median(self.metrics[metric_name])
-
-    def reset(self, metric_name: str = None):
-        """
-            Reset a metric. If no metric name is provided, all metrics are resetted.
-        """
-        if metric_name is not None:
-            self.metrics[metric_name] = []
-        else:
-            self.metrics = {}
-
 class TensorboardWriter:
     """
     Class for handling the tensorboard logger
 
-    Args:
-    -----
-    logdir: string
-        path where the tensorboard logs will be stored
     """
 
-    def __init__(self, logdir):
-        """ Initializing tensorboard writer """
+    def __init__(self, logdir: str) -> None:
+        """ 
+            Initializing tensorboard writer.
+
+            Arguments:
+            -----------
+            @param logdir: Path to the log directory.
+        """
         self.logdir = logdir
         self.writer = SummaryWriter(logdir)
         return
 
-    def add_scalar(self, name, val, step):
-        """ Adding a scalar for plot """
+    def add_scalar(self, name:str, val:Union[float,int], step:int):
+        """ 
+            Adding a scalar for plot.
+
+            Arguments:
+            -----------
+            @param name: Name of the scalar.
+            @param val: Value of the scalar.
+            @param step: Current training step.
+        """
         self.writer.add_scalar(name, val, step)
         return
 
@@ -555,8 +629,20 @@ class TensorboardWriter:
         return
 
 class WandBWriter(object):
+    """
+        The WandB writer encapsulating the communication with the WandB servers.
+    """
 
     def __init__(self, run_name: str, project_name: str, **kwargs):
+        """
+            Initialize the writer.
+
+            Arguments:
+            -----------
+            @param run_name: Name of the run.
+            @param project_name: Name of the project.
+            @param kwargs: Additional arguments to be passed to wandb.init: https://docs.wandb.ai/ref/python/init
+        """
         wandb.login()
         self.run = wandb.init(project=project_name, name=run_name, **kwargs)
 
@@ -565,7 +651,9 @@ class WandBWriter(object):
             Log data to WandB.
 
             Arguments:
-                data [Dict[str, Any]]: Data to log of form: {metric_name: value, metric_name2: value2,...}
+            -----------
+            @param data: Metrics to be logged. The dictionary is of format {metric_name: metric_value}.
+            @param step: Current training step.
 
         """
         
@@ -577,9 +665,27 @@ class WandBWriter(object):
         return True
     
     def log_config(self, config: Dict[str, Any]) -> None:
+        """
+            Log the configuration parameters.
+
+            Arguments:
+            -----------
+            @param config: Configuration parameters to be logged. The dictionary is of format {config_name: config_name}.
+        """
         self.run.config.update(config)
 
     def log_histogram(self, name: str, values: Union[torch.Tensor, np.array], step: Optional[int]=None) -> None:
+        """
+            Log a histogram to WandB.
+
+            Arguments:
+            -----------
+            @param name: Name of the histogram.
+            @param values: Values of the histogram.
+            @param step: Current training step.
+
+            TODO: This function was not properly tested yet and should be used with caution
+        """
         if torch.is_tensor(values):
             values = values.detach().cpu().numpy()
 
@@ -588,7 +694,15 @@ class WandBWriter(object):
     
     def log_image(self, name: str, image: Union[torch.Tensor, np.array], step: Optional[int]=None) -> None:
         """
-            Log images to WandB.
+            Log images to WandB. Images should be given in RGB format.
+
+            Arguments:
+            -----------
+            @param name: Name of the image.
+            @param image: Image to be logged. Image can be given in formats: [H, W, C] or [C, H, W] 
+            @param step: Current training step.
+
+            TODO: Add batched image support
         """
         # import ipdb; ipdb.set_trace()
         assert len(image.shape) in [3, 4], "Please provide images of shape [H, W, C], [B, H, W, C], [C, H, W] or [B, C, H, W]"
@@ -613,6 +727,8 @@ class WandBWriter(object):
 
             Arguments:
                 image [Union[torch.Tensor, np.array]]: Image to log.
+
+            TODO: !! This function does not work right now !!
 
         """
         assert len(image.shape) in [3, 4], "Please provide images of shape [H, W, C], [B, H, W, C], [C, H, W] or [B, C, H, W]"
@@ -661,22 +777,45 @@ class WandBWriter(object):
         wandb.log({name: wandbImage}, step=step)
 
 class MetricTracker(object):
-    """ Manages and stores different metrics """
+    """ 
+        Manages and stores different metrics.
+        This can be used to efficiently track the sum and average of a metric over the course of an epoch.
+    """
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """ Initialize the metric tracker """
         self.metrics = None
         self.reset()
 
     def reset(self):
+        """ Deleted and reset all metrics. """
         self.metrics = {}
 
     def update(self, name:str, val:Union[float,int, List[Union[float,int]]])->None:
+        """
+            Update the tracked metrics.
+
+            Arguments:
+            -----------
+            @param name: Name of the metric.
+            @param val: Value of the metric. Metrics can be given as scalars or a list of scalars
+        """
         if name not in self.metrics:
             i = 1 if type(val)!=list else len(val)
             self.metrics[name] = AverageMeter(i)
         self.metrics[name].update(val)
 
     def get_average(self, name:str=None) -> Union[Dict[str, List[float]], List[float]]:
+        """
+            Retrieve the average of the tracked metrics.
+            If a name is provided it only returns the given metric, else all metrics are returned.
+
+            Arguments:
+            -----------
+            @param name: Name of the metric. If None all metrics are returned.
+
+            @return Dict[str, List[float]] or List[float]: Average of the given metrics
+        """
         if name is None:
             ret_dict = {}
             for name, meter in self.metrics.items():
@@ -685,6 +824,16 @@ class MetricTracker(object):
         return self.metrics[name].avg
     
     def get_sum(self, name:str=None) -> Union[Dict[str,List[float]],List[float]]:
+        """
+            Retrieve the sum of the tracked metrics.
+            If a name is provided it only returns the given metric, else all metrics are returned.
+
+            Arguments:
+            -----------
+            @param name: Name of the metric. If None all metrics are returned.
+
+            @return Dict[str, List[float]] or List[float]: Sum of the given metrics
+        """
         if name is None:
             ret_dict = {}
             for name, meter in self.metrics.items():
@@ -695,20 +844,45 @@ class MetricTracker(object):
 
 
 class AverageMeter(object):
-    """Computes and stores the average and current value"""
+    """Computes and stores the average, sum and current value"""
 
-    def __init__(self, i=1, precision=3):
+    def __init__(self, i:int=1, precision:int=3):
+        """
+            Initialize the AverageMeters.
+
+            Arguments:
+            -----------
+            @param i: Number of different metrics saved.
+            @param precision: Precision of the average at print out.
+        """
         self.meters = i
         self.precision = precision
         self.reset(self.meters)
 
-    def reset(self, i):
+    def reset(self, i:int=None):
+        """
+            Reset the average meters.
+
+            Arguments:
+            -----------
+            @param i: Number of different metrics saved. If not provided the number given at initialization is used
+        """
+        if i is None:
+            i = self.meters
         self.val = [0]*i
         self.avg = [0]*i
         self.sum = [0]*i
         self.count = 0
 
-    def update(self, val, n=1):
+    def update(self, val:Union[float,int], n:int=1):
+        """
+            Update the average meters.
+
+            Arguments:
+            -----------
+            @param val: Value of the metric. Metrics can be given as scalars or a list of scalars.
+            @param n: Number of times the metric is updated.
+        """
         if not isinstance(val, list):
             val = [val]
         assert(len(val) == self.meters)
@@ -719,8 +893,9 @@ class AverageMeter(object):
             self.avg[i] = self.sum[i] / self.count
 
     def __repr__(self):
+        """ Representation overload to show average and value."""
         val = ' '.join(['{:.{}f}'.format(v, self.precision) for v in self.val])
         avg = ' '.join(['{:.{}f}'.format(a, self.precision) for a in self.avg])
         return '{} ({})'.format(val, avg)
-    
+# Global logger
 LOGGER = None
