@@ -348,7 +348,7 @@ class Logger(object):
             @param image: Image to be logged. The image should be of format [height,width,channel]
             @param step: Current training step.
         """
-        savePath = str(P(self.vis_path) / (name+'.png'))
+        savePath = str(P(self.vis_path) / name)
         plt.imsave(savePath, image)
         if self.wandb_writer is not None:
             self.wandb_writer.log_image(name, image, step)
