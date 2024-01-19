@@ -1,12 +1,238 @@
-2024-01-17-15:44:30   [info]: Calling: log_architecture...
-2024-01-17-15:45:02   [info]: Epoch: 1/100
-2024-01-17-15:45:06   [info]: 
-Evaluation:
-2024-01-17-15:45:53   [info]: Evaluation Results:
-2024-01-17-15:45:53   [info]:   Accuracy: 	0.9591
-2024-01-17-15:45:53   [info]:   IoU: 		0.0066
-2024-01-17-15:45:53   [info]:   Precision: 	0.0069
-2024-01-17-15:45:53   [info]:   Recall: 	0.0370
-2024-01-17-15:45:53   [info]:   Dice: 	0.0111
-2024-01-17-15:46:04   [info]: 
-Training:
+2024-01-18-22:18:16   [info]: Calling: log_architecture...
+2024-01-18-22:18:16   [info]: 
+Epoch: 1/50
+2024-01-18-22:18:16   [info]: Evaluation:
+2024-01-18-22:18:47   [info]: Evaluation Results:
+2024-01-18-22:18:47   [info]:   Accuracy: 	0.9088
+2024-01-18-22:18:47   [info]:   IoU: 		0.0099
+2024-01-18-22:18:47   [info]:   Precision: 	0.0694
+2024-01-18-22:18:47   [info]:   Recall: 	0.0432
+2024-01-18-22:18:47   [info]:   Dice: 	0.0172
+2024-01-18-22:18:47   [info]: Training:
+2024-01-18-22:20:29   [info]: 
+Epoch: 2/50
+2024-01-18-22:20:29   [info]: Training:
+2024-01-18-22:22:12   [info]: 
+Epoch: 3/50
+2024-01-18-22:22:12   [info]: Training:
+2024-01-18-22:23:55   [info]: 
+Epoch: 4/50
+2024-01-18-22:23:55   [info]: Training:
+2024-01-18-22:25:39   [info]: 
+Epoch: 5/50
+2024-01-18-22:25:39   [info]: Evaluation:
+2024-01-18-22:26:08   [info]: Evaluation Results:
+2024-01-18-22:26:08   [info]:   Accuracy: 	0.9827
+2024-01-18-22:26:08   [info]:   IoU: 		0.3051
+2024-01-18-22:26:08   [info]:   Precision: 	0.4159
+2024-01-18-22:26:08   [info]:   Recall: 	0.3781
+2024-01-18-22:26:08   [info]:   Dice: 	0.3661
+2024-01-18-22:26:08   [info]: Training:
+2024-01-18-22:27:51   [info]: 
+Epoch: 6/50
+2024-01-18-22:27:51   [info]: Training:
+2024-01-18-22:29:34   [info]: 
+Epoch: 7/50
+2024-01-18-22:29:34   [info]: Training:
+2024-01-18-22:31:17   [info]: 
+Epoch: 8/50
+2024-01-18-22:31:17   [info]: Training:
+2024-01-18-22:33:00   [info]: 
+Epoch: 9/50
+2024-01-18-22:33:00   [info]: Training:
+2024-01-18-22:34:44   [info]: 
+Epoch: 10/50
+2024-01-18-22:34:44   [info]: Evaluation:
+2024-01-18-22:35:13   [info]: Evaluation Results:
+2024-01-18-22:35:13   [info]:   Accuracy: 	0.9854
+2024-01-18-22:35:13   [info]:   IoU: 		0.3664
+2024-01-18-22:35:13   [info]:   Precision: 	0.4742
+2024-01-18-22:35:13   [info]:   Recall: 	0.4477
+2024-01-18-22:35:13   [info]:   Dice: 	0.4444
+2024-01-18-22:35:13   [info]: Training:
+2024-01-18-22:36:56   [info]: Calling: save_checkpoint...
+2024-01-18-22:36:56   [info]: Checkpoint was saved to: experiments/example_exp/example_run/checkpoints/checkpoint_epoch_10.pth
+2024-01-18-22:36:56   [info]: 
+Epoch: 11/50
+2024-01-18-22:36:56   [info]: Training:
+2024-01-18-22:38:39   [info]: 
+Epoch: 12/50
+2024-01-18-22:38:39   [info]: Training:
+2024-01-18-22:40:23   [info]: 
+Epoch: 13/50
+2024-01-18-22:40:23   [info]: Training:
+2024-01-18-22:42:07   [info]: 
+Epoch: 14/50
+2024-01-18-22:42:07   [info]: Training:
+2024-01-18-22:43:50   [info]: 
+Epoch: 15/50
+2024-01-18-22:43:50   [info]: Evaluation:
+2024-01-18-22:44:19   [info]: Evaluation Results:
+2024-01-18-22:44:19   [info]:   Accuracy: 	0.9864
+2024-01-18-22:44:19   [info]:   IoU: 		0.4070
+2024-01-18-22:44:19   [info]:   Precision: 	0.5586
+2024-01-18-22:44:19   [info]:   Recall: 	0.4866
+2024-01-18-22:44:19   [info]:   Dice: 	0.4980
+2024-01-18-22:44:19   [info]: Training:
+2024-01-18-22:46:02   [info]: 
+Epoch: 16/50
+2024-01-18-22:46:02   [info]: Training:
+2024-01-18-22:47:45   [info]: 
+Epoch: 17/50
+2024-01-18-22:47:45   [info]: Training:
+2024-01-18-22:49:28   [info]: 
+Epoch: 18/50
+2024-01-18-22:49:28   [info]: Training:
+2024-01-18-22:51:12   [info]: 
+Epoch: 19/50
+2024-01-18-22:51:12   [info]: Training:
+2024-01-18-22:52:55   [info]: 
+Epoch: 20/50
+2024-01-18-22:52:55   [info]: Evaluation:
+2024-01-18-22:53:23   [info]: Evaluation Results:
+2024-01-18-22:53:23   [info]:   Accuracy: 	0.9872
+2024-01-18-22:53:23   [info]:   IoU: 		0.4276
+2024-01-18-22:53:23   [info]:   Precision: 	0.5882
+2024-01-18-22:53:23   [info]:   Recall: 	0.5185
+2024-01-18-22:53:23   [info]:   Dice: 	0.5214
+2024-01-18-22:53:23   [info]: Training:
+2024-01-18-22:55:06   [info]: Calling: save_checkpoint...
+2024-01-18-22:55:06   [info]: Checkpoint was saved to: experiments/example_exp/example_run/checkpoints/checkpoint_epoch_20.pth
+2024-01-18-22:55:06   [info]: 
+Epoch: 21/50
+2024-01-18-22:55:06   [info]: Training:
+2024-01-18-22:56:49   [info]: 
+Epoch: 22/50
+2024-01-18-22:56:49   [info]: Training:
+2024-01-18-22:58:33   [info]: 
+Epoch: 23/50
+2024-01-18-22:58:33   [info]: Training:
+2024-01-18-23:00:16   [info]: 
+Epoch: 24/50
+2024-01-18-23:00:16   [info]: Training:
+2024-01-18-23:01:59   [info]: 
+Epoch: 25/50
+2024-01-18-23:01:59   [info]: Evaluation:
+2024-01-18-23:02:27   [info]: Evaluation Results:
+2024-01-18-23:02:27   [info]:   Accuracy: 	0.9873
+2024-01-18-23:02:27   [info]:   IoU: 		0.4270
+2024-01-18-23:02:27   [info]:   Precision: 	0.5953
+2024-01-18-23:02:27   [info]:   Recall: 	0.5112
+2024-01-18-23:02:27   [info]:   Dice: 	0.5197
+2024-01-18-23:02:27   [info]: Training:
+2024-01-18-23:04:10   [info]: 
+Epoch: 26/50
+2024-01-18-23:04:10   [info]: Training:
+2024-01-18-23:05:53   [info]: 
+Epoch: 27/50
+2024-01-18-23:05:53   [info]: Training:
+2024-01-18-23:07:37   [info]: 
+Epoch: 28/50
+2024-01-18-23:07:37   [info]: Training:
+2024-01-18-23:09:20   [info]: 
+Epoch: 29/50
+2024-01-18-23:09:20   [info]: Training:
+2024-01-18-23:11:03   [info]: 
+Epoch: 30/50
+2024-01-18-23:11:03   [info]: Evaluation:
+2024-01-18-23:11:32   [info]: Evaluation Results:
+2024-01-18-23:11:32   [info]:   Accuracy: 	0.9882
+2024-01-18-23:11:32   [info]:   IoU: 		0.4714
+2024-01-18-23:11:32   [info]:   Precision: 	0.6248
+2024-01-18-23:11:32   [info]:   Recall: 	0.5651
+2024-01-18-23:11:32   [info]:   Dice: 	0.5734
+2024-01-18-23:11:32   [info]: Training:
+2024-01-18-23:13:15   [info]: Calling: save_checkpoint...
+2024-01-18-23:13:16   [info]: Checkpoint was saved to: experiments/example_exp/example_run/checkpoints/checkpoint_epoch_30.pth
+2024-01-18-23:13:16   [info]: 
+Epoch: 31/50
+2024-01-18-23:13:16   [info]: Training:
+2024-01-18-23:14:59   [info]: 
+Epoch: 32/50
+2024-01-18-23:14:59   [info]: Training:
+2024-01-18-23:16:43   [info]: 
+Epoch: 33/50
+2024-01-18-23:16:43   [info]: Training:
+2024-01-18-23:18:26   [info]: 
+Epoch: 34/50
+2024-01-18-23:18:26   [info]: Training:
+2024-01-18-23:20:09   [info]: 
+Epoch: 35/50
+2024-01-18-23:20:09   [info]: Evaluation:
+2024-01-18-23:20:38   [info]: Evaluation Results:
+2024-01-18-23:20:38   [info]:   Accuracy: 	0.9878
+2024-01-18-23:20:38   [info]:   IoU: 		0.4482
+2024-01-18-23:20:38   [info]:   Precision: 	0.6293
+2024-01-18-23:20:38   [info]:   Recall: 	0.5301
+2024-01-18-23:20:38   [info]:   Dice: 	0.5461
+2024-01-18-23:20:39   [info]: Training:
+2024-01-18-23:22:21   [info]: 
+Epoch: 36/50
+2024-01-18-23:22:21   [info]: Training:
+2024-01-18-23:24:05   [info]: 
+Epoch: 37/50
+2024-01-18-23:24:05   [info]: Training:
+2024-01-18-23:25:49   [info]: 
+Epoch: 38/50
+2024-01-18-23:25:49   [info]: Training:
+2024-01-18-23:27:33   [info]: 
+Epoch: 39/50
+2024-01-18-23:27:33   [info]: Training:
+2024-01-18-23:29:17   [info]: 
+Epoch: 40/50
+2024-01-18-23:29:17   [info]: Evaluation:
+2024-01-18-23:29:47   [info]: Evaluation Results:
+2024-01-18-23:29:47   [info]:   Accuracy: 	0.9882
+2024-01-18-23:29:47   [info]:   IoU: 		0.4801
+2024-01-18-23:29:47   [info]:   Precision: 	0.6390
+2024-01-18-23:29:47   [info]:   Recall: 	0.5674
+2024-01-18-23:29:47   [info]:   Dice: 	0.5834
+2024-01-18-23:29:47   [info]: Training:
+2024-01-18-23:31:30   [info]: Calling: save_checkpoint...
+2024-01-18-23:31:30   [info]: Checkpoint was saved to: experiments/example_exp/example_run/checkpoints/checkpoint_epoch_40.pth
+2024-01-18-23:31:30   [info]: 
+Epoch: 41/50
+2024-01-18-23:31:30   [info]: Training:
+2024-01-18-23:33:14   [info]: 
+Epoch: 42/50
+2024-01-18-23:33:14   [info]: Training:
+2024-01-18-23:34:57   [info]: 
+Epoch: 43/50
+2024-01-18-23:34:57   [info]: Training:
+2024-01-18-23:36:41   [info]: 
+Epoch: 44/50
+2024-01-18-23:36:41   [info]: Training:
+2024-01-18-23:38:25   [info]: 
+Epoch: 45/50
+2024-01-18-23:38:25   [info]: Evaluation:
+2024-01-18-23:38:53   [info]: Evaluation Results:
+2024-01-18-23:38:53   [info]:   Accuracy: 	0.9891
+2024-01-18-23:38:53   [info]:   IoU: 		0.5046
+2024-01-18-23:38:53   [info]:   Precision: 	0.6502
+2024-01-18-23:38:53   [info]:   Recall: 	0.6049
+2024-01-18-23:38:53   [info]:   Dice: 	0.6107
+2024-01-18-23:38:53   [info]: Training:
+2024-01-18-23:40:36   [info]: 
+Epoch: 46/50
+2024-01-18-23:40:36   [info]: Training:
+2024-01-18-23:42:20   [info]: 
+Epoch: 47/50
+2024-01-18-23:42:20   [info]: Training:
+2024-01-18-23:44:04   [info]: 
+Epoch: 48/50
+2024-01-18-23:44:04   [info]: Training:
+2024-01-18-23:45:48   [info]: 
+Epoch: 49/50
+2024-01-18-23:45:48   [info]: Training:
+2024-01-18-23:47:32   [info]: 
+Epoch: 50/50
+2024-01-18-23:47:32   [info]: Evaluation:
+2024-01-18-23:48:01   [info]: Evaluation Results:
+2024-01-18-23:48:01   [info]:   Accuracy: 	0.9879
+2024-01-18-23:48:01   [info]:   IoU: 		0.4779
+2024-01-18-23:48:01   [info]:   Precision: 	0.6215
+2024-01-18-23:48:01   [info]:   Recall: 	0.5850
+2024-01-18-23:48:01   [info]:   Dice: 	0.5837
+2024-01-18-23:48:01   [info]: Training:
+2024-01-18-23:49:44   [info]: Calling: save_checkpoint...
+2024-01-18-23:49:44   [info]: Checkpoint was saved to: experiments/example_exp/example_run/checkpoints/checkpoint_epoch_50.pth
