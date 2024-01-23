@@ -1,13 +1,14 @@
 """
 Contains tools for high-level timing.
 """
-
+import torch
 import time
 from contextlib import ContextDecorator
 
 class Timer(ContextDecorator):
     active_timers = []
     enabled = False
+    cuda_synchronized = False
 
     def __init__(self, name):
         self.name = name
@@ -17,7 +18,8 @@ class Timer(ContextDecorator):
     def __enter__(self):
         if not Timer.enabled:
             return self
-
+        if self.cuda_synchronized:
+            torch.cuda.synchronize()
         self.start_time = time.time()
         Timer.active_timers.append(self)
         self.children = []
@@ -26,7 +28,8 @@ class Timer(ContextDecorator):
     def __exit__(self, exc_type, exc, exc_tb):
         if not Timer.enabled:
             return
-
+        if self.cuda_synchronized:
+            torch.cuda.synchronize()
         self.exit_time = time.time()
         self.duration = self.exit_time - self.start_time
 
@@ -49,4 +52,3 @@ class Timer(ContextDecorator):
         ))
         for child in self.children:
             child._print_result(indent=indent+2)
-
