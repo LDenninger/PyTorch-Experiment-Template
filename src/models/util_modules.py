@@ -1,3 +1,10 @@
+"""
+    Helpful PyTorch models that are not provided by default.
+    
+    Author: Luis Denninger <l_denninger@uni-bonn.de>
+
+"""
+
 import torch
 import torch.nn as nn
 import math
