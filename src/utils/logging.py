@@ -24,6 +24,9 @@ import csv
 import wandb
 import matplotlib.pyplot as plt
 
+##== Global Parameters ==##
+WANDB_IMAGE_LOGGING = False
+
 #####===== Logging Decorators =====#####
 
 def log_function(func):
@@ -74,17 +77,16 @@ def emergency_save(f):
             print_("There has been an exception. Saving emergency checkpoint...")
             self_ = args[0]
             if hasattr(self_, "model") and hasattr(self_, "optimizer"):
-                fname = f"emergency_checkpoint_epoch_{self_.epoch}.pth"
-                save_checkpoint(
-                    model=self_.model,
-                    optimizer=self_.optimizer,
-                    scheduler=self_.scheduler,
-                    epoch=self_.epoch,
-                    exp_path=self_.exp_path,
-                    savedir="models",
-                    savename=fname
-                )
-                print_(f"  --> Saved emergency checkpoint {fname}")
+                if LOGGER:
+                    fname = "emergency_save.pth"
+                    LOGGER.save_checkpoint(
+                        model=self_.model,
+                        optimizer=self_.optimizer,
+                        scheduler=self_.scheduler,
+                        epoch=self_.epoch,
+                        save_name=fname
+                    )
+                    print_(f"  --> Saved emergency checkpoint {fname}")
             message = traceback.format_exc()
             print_(message, message_type="error")
             exit()
@@ -222,7 +224,11 @@ class Logger(object):
         Available writers are: WandB writer, Tensorboard writer or CSV writer.
     
     """
-    def __init__(self, exp_name: Optional[str] = None, run_name: Optional[str] = None, exp_path: Optional[str] = None):
+    def __init__(self, 
+                 exp_name: Optional[str] = None, 
+                 run_name: Optional[str] = None, 
+                 exp_path: Optional[str] = None,
+                 log_file_name: Optional[str] = "log.txt",):
         """
             Initialize the logger. This also initializes a global logger that can be accessed throughou the project.
 
@@ -255,7 +261,7 @@ class Logger(object):
         self.checkpoint_path = self.run_path / "checkpoints"
         if not os.path.exists(str(self.checkpoint_path)):
             os.makedirs(str(self.checkpoint_path))
-        self.log_file_path = self.log_path / 'log.txt'
+        self.log_file_path = self.log_path / log_file_name
         if os.path.exists(self.log_file_path):
             os.remove(self.log_file_path)
 
@@ -350,7 +356,7 @@ class Logger(object):
         """
         savePath = str(P(self.vis_path) / name)
         plt.imsave(savePath, image)
-        if self.wandb_writer is not None:
+        if WANDB_IMAGE_LOGGING and self.wandb_writer is not None:
             self.wandb_writer.log_image(name, image, step)
         if self.tb_writer is not None and False:
             self.tb_writer.log_image(name, image, step)
@@ -371,7 +377,7 @@ class Logger(object):
         if self.wandb_writer is not None:
             self.wandb_writer.log_histogram(name, values)
 
-    def save_checkpoint(self,  epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer=None, scheduler=None):
+    def save_checkpoint(self,  epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer=None, scheduler=None, finished:bool = False, save_name: str=None) -> None:
         """
             Save a model checkpoint during training. 
             Optionally, one can also provide the optimization modules to resume training
@@ -390,7 +396,9 @@ class Logger(object):
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
-            save_path=self.checkpoint_path
+            save_path=self.checkpoint_path,
+            finished=finished,
+            save_name=save_name
         )
 
 
@@ -448,8 +456,6 @@ class Logger(object):
                 - visualization -> To save any visualizations
 
         """
-        if not self.run_initialized:
-            return
         assert name in ['log', 'plot', 'checkpoint', 'visualization'], "Please provide a valid directory type"
         if name is None:
             return self.run_path
@@ -461,6 +467,44 @@ class Logger(object):
             return self.checkpoint_path
         elif name == 'visualization':
             return self.vis_path
+        
+    
+    def set_path(self, name:Literal['log', 'plot', 'checkpoint', 'visualization'], path: str) -> None:
+        """
+            Get the path to the specified directory.
+
+            Arguments:
+            -----------
+            @param name: Type of the directory to retrieve the path from.
+                The run directory consists of the following specific directories: 
+                - log -> To save any logs
+                - plot -> To save any plots
+                - checkpoint -> To save model checkpoints
+                - visualization -> To save any visualizations
+            @param path: Path to the directory.
+
+        """
+        assert type in ['log', 'plot', 'checkpoint', 'visualization'], "Please provide a valid directory type"
+        if type == 'log':
+            self.log_path = path
+        elif type == 'plot':
+            self.plot_path = path
+        elif type == 'checkpoint':
+            self.checkpoint_path = path
+        elif type == 'visualization':
+            self.vis_path = path
+
+    def set_logfile_name(self, file_name: str) -> None:
+        """
+            Set the name of the log file.
+
+            Arguments:
+            -----------
+            @param file_name: Name of the log file.
+        """
+        self.log_file_path = self.log_path / file_name
+        if os.path.exists(self.log_file_path):
+            os.remove(self.log_file_path)
         
     def _get_datetime(self) -> str:
         """ Internal function to get the current formatted time. """
