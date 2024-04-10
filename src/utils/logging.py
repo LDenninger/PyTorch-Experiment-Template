@@ -184,7 +184,7 @@ def save_checkpoint(epoch, model=None, optimizer=None, scheduler=None, save_path
     """
 
     if(save_name is not None):
-        checkpoint_name = save_name+f'epoch_{epoch}.pth'
+        checkpoint_name = save_name+f'_epoch_{epoch}.pth'
     elif(save_name is None and finished is True):
         checkpoint_name = "checkpoint_epoch_final.pth"
     else:
@@ -344,7 +344,7 @@ class Logger(object):
         with open(self.log_path / 'git_hash.txt', 'w') as f:
             f.write(gitHash)
 
-    def log_image(self, name: str, image: Union[torch.tensor, np.array], step: Optional[int] = None) -> None:
+    def log_image(self, name: str, image: Union[torch.tensor, np.array], step: Optional[int] = None, vis_path=None) -> None:
         """ 
             Log an image to the experiment directory.
 
@@ -354,12 +354,43 @@ class Logger(object):
             @param image: Image to be logged. The image should be of format [height,width,channel]
             @param step: Current training step.
         """
-        savePath = str(P(self.vis_path) / name)
+        if vis_path is None:
+            savePath = str(P(self.vis_path) / name)
+        else:
+            savePath = self.run_path / vis_path
+            os.makedirs(savePath, exist_ok=True)
+            
+            savePath = str(savePath / name)
+            
         plt.imsave(savePath, image)
+        
         if WANDB_IMAGE_LOGGING and self.wandb_writer is not None:
             self.wandb_writer.log_image(name, image, step)
         if self.tb_writer is not None and False:
             self.tb_writer.log_image(name, image, step)
+            
+            
+    def log_video(self, video_name, images_list, vis_path, fps):
+        """
+            Log a video to the experiment directory.
+
+            Arguments:
+            -----------
+            @param video_name: Name of the video that is used to save the file.
+            @param images_list: List of images to be logged.
+            @param vis_path: Path to the visualization directory.
+        """
+        savePath = self.run_path / vis_path
+        os.makedirs(savePath, exist_ok=True)
+        savePath = str(savePath / video_name)
+        
+        # if video exists, remove it
+        if os.path.exists(savePath):
+            print(f"Removing existing video at {savePath}")
+            os.remove(savePath)
+        
+        torchvision.io.write_video(savePath, images_list, fps=fps)
+            
 
     def log_histograms(self, name: str, values: Union[np.array, torch.tensor]):
         """
@@ -376,6 +407,18 @@ class Logger(object):
             values = values.cpu().numpy()
         if self.wandb_writer is not None:
             self.wandb_writer.log_histogram(name, values)
+
+    def log_to_file(self, message: str, file_name: str) -> None:
+        """
+            Log a message to a file.
+
+            Arguments:
+            -----------
+            @param message: Message to be logged.
+            @param file_name: Name of the file to be saved.
+        """
+        with open(self.log_path / (file_name+".txt"), 'w') as f:
+            f.write(f'{message}\n')
 
     def save_checkpoint(self,  epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer=None, scheduler=None, finished:bool = False, save_name: str=None) -> None:
         """
@@ -440,6 +483,10 @@ class Logger(object):
             @param kwargs: Additional arguments according to the TensorBoard module.
         """
         self.tb_writer = TensorboardWriter(self.log_path, **kwargs)
+
+    def watch_model(self, model: torch.nn.Module):
+        if self.wandb_writer is not None:
+            self.wandb_writer.watch_model(model)
     
     
     def get_path(self, name: Optional[Literal['log', 'plot', 'checkpoint', 'visualization']] = None) -> str:
@@ -505,10 +552,17 @@ class Logger(object):
         self.log_file_path = self.log_path / file_name
         if os.path.exists(self.log_file_path):
             os.remove(self.log_file_path)
+
+    def finish(self) -> None:
+        if self.wandb_writer is not None:
+            self.wandb_writer.finish()
+        LOGGER = None
         
     def _get_datetime(self) -> str:
         """ Internal function to get the current formatted time. """
         return datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
+    
+
 
 class CSVWriter(object):
     """
@@ -689,6 +743,10 @@ class WandBWriter(object):
         """
         wandb.login()
         self.run = wandb.init(project=project_name, name=run_name, **kwargs)
+    def finish(self):
+        wandb.finish(quiet=True)
+    def watch_model(self, model: torch.nn.Module) -> None:
+        wandb.watch(model, log_graph=True)
 
     def log(self, data: Dict[str, Any], step: Optional[int]=None) -> bool:
         """
@@ -820,6 +878,8 @@ class WandBWriter(object):
                         }})              
         wandb.log({name: wandbImage}, step=step)
 
+    
+
 class MetricTracker(object):
     """ 
         Manages and stores different metrics.
@@ -927,6 +987,7 @@ class AverageMeter(object):
             @param val: Value of the metric. Metrics can be given as scalars or a list of scalars.
             @param n: Number of times the metric is updated.
         """
+        
         if not isinstance(val, list):
             val = [val]
         assert(len(val) == self.meters)
