@@ -657,6 +657,45 @@ class CSVWriter(object):
             csv_writer = csv.writer(csvfile)
             csv_writer.writerows(data)
 
+class CSVReader(object):
+    """
+    A class to read metrics from a CSV file and return them for further processing, such as plotting.
+    """
+
+    def __init__(self):
+        """
+        Initializes a CSV reader that is used to retrieve the logged metrics.
+
+        """
+
+    def __call__(self, file_name: str) -> Dict[str, List[Tuple[int, Any]]]:
+        """
+        Reads the metrics from the CSV file and returns them.
+
+        Returns:
+        - Dict[str, List[Tuple[int, Any]]]: A dictionary where keys are the metric names and values are lists of tuples.
+          Each tuple contains the step and the metric value at that step.
+        """
+        metrics = {}
+        try:
+            with open(file_name, mode='r') as csvfile:
+                csv_reader = csv.reader(csvfile)
+                headers = next(csv_reader, None)  # Get the headers of the file
+                if headers is not None:
+                    for header in headers[1:]:  # Skip the first header as it is assumed to be the step
+                        metrics[header] = []
+
+                    for row in csv_reader:
+                        step = int(row[0])  # Assuming the first column is always the step
+                        for i, value in enumerate(row[1:], start=1):
+                            if value:  # Check if the value is not empty
+                                metrics[headers[i]].append((step, float(value)))
+        except Exception as e:
+            print(f"ERROR: CSV Reader, unable to read from file:\n{e}")
+            return None
+
+        return metrics
+
 class TensorboardWriter:
     """
     Class for handling the tensorboard logger
